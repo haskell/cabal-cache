@@ -13,7 +13,7 @@ module HaskellWorks.Ci.Assist.Core
   ) where
 
 import Control.DeepSeq
-import Control.Lens
+import Control.Lens              hiding ((<.>))
 import Control.Monad
 import Data.Aeson
 import Data.Bool
@@ -22,7 +22,9 @@ import Data.Maybe
 import Data.Semigroup            ((<>))
 import Data.Text                 (Text)
 import GHC.Generics
+import System.FilePath           ((<.>), (</>))
 
+import qualified Data.List                    as List
 import qualified Data.Text                    as T
 import qualified HaskellWorks.Ci.Assist.Text  as T
 import qualified HaskellWorks.Ci.Assist.Types as Z
@@ -31,9 +33,9 @@ import qualified System.IO                    as IO
 
 type CompilerId = Text
 type PackageId  = Text
-type PackageDir = Text
-type ConfPath   = Text
-type Library    = Text
+type PackageDir = FilePath
+type ConfPath   = FilePath
+type Library    = FilePath
 
 data PackageInfo = PackageInfo
   { compilerId :: CompilerId
@@ -45,11 +47,11 @@ data PackageInfo = PackageInfo
 
 relativePaths :: PackageInfo -> [FilePath]
 relativePaths pInfo = mempty
-  <>  maybeToList (T.unpack <$> pInfo ^. the @"confPath")
-  <>  [T.unpack (packageDir pInfo)]
-  <>  (pInfo ^. the @"libs" <&> T.unpack)
+  <>  maybeToList (pInfo ^. the @"confPath")
+  <>  [packageDir pInfo]
+  <>  (pInfo ^. the @"libs")
 
-getPackages :: Text -> Z.PlanJson -> IO [PackageInfo]
+getPackages :: FilePath -> Z.PlanJson -> IO [PackageInfo]
 getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId)
   where compilerId :: Text
         compilerId = planJson ^. the @"compilerId"
@@ -58,25 +60,26 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         predicate :: Z.Package -> Bool
         predicate package = package ^. the @"packageType" /= "pre-existing" && package ^. the @"style" == Just "global"
 
-mkPackageInfo :: Text -> CompilerId -> Z.Package -> IO PackageInfo
+mkPackageInfo :: FilePath -> CompilerId -> Z.Package -> IO PackageInfo
 mkPackageInfo basePath cid pkg = do
   let pid               = pkg ^. the @"id"
-  let compilerPath      = basePath <> "/" <> cid
-  let relativeConfPath  = cid <> "/package.db/" <> pid <> ".conf"
-  let absoluteConfPath  = basePath <> "/" <> relativeConfPath
-  let libPath           = compilerPath <> "/lib"
-  let relativeLibPath   = cid <> "/lib"
+  let compilerPath      = basePath </> T.unpack cid
+  let relativeConfPath  = T.unpack cid </> "package.db" </> T.unpack pid <.> ".conf"
+  let absoluteConfPath  = basePath </> relativeConfPath
+  let libPath           = compilerPath </> "lib"
+  let relativeLibPath   = T.unpack cid </> "lib"
   let libPrefix         = "libHS" <> pid
-  absoluteConfPathExists <- IO.doesFileExist (T.unpack absoluteConfPath)
-  libPathExists <- IO.doesDirectoryExist (T.unpack libPath)
+  absoluteConfPathExists <- IO.doesFileExist absoluteConfPath
+  libPathExists <- IO.doesDirectoryExist libPath
   libFiles <- getLibFiles relativeLibPath libPath libPrefix
   return PackageInfo
     { compilerId  = cid
     , packageId   = pid
-    , packageDir  = cid <> "/" <> pid
+    , packageDir  = T.unpack cid </> T.unpack pid
     , confPath    = bool Nothing (Just relativeConfPath) absoluteConfPathExists
     , libs        = libFiles
     }
 
-getLibFiles :: Text -> Text -> Text -> IO [Library]
-getLibFiles relativeLibPath libPath libPrefix = fmap ((relativeLibPath <> "/") <>) . mfilter (T.isPrefixOf libPrefix) . fmap T.pack <$> IO.listDirectory (T.unpack libPath)
+getLibFiles :: FilePath -> FilePath -> Text -> IO [Library]
+getLibFiles relativeLibPath libPath libPrefix =
+  fmap (relativeLibPath </>) . mfilter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath

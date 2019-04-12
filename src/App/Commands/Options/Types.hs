@@ -10,14 +10,14 @@ import Network.AWS.Types (Region)
 
 data SyncToArchiveOptions = SyncToArchiveOptions
   { archiveUri :: Text
-  , storePath  :: Text
+  , storePath  :: FilePath
   , threads    :: Int
   , region     :: Region
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
   { archiveUri :: Text
-  , storePath  :: Text
+  , storePath  :: FilePath
   , threads    :: Int
   , region     :: Region
   } deriving (Eq, Show, Generic)

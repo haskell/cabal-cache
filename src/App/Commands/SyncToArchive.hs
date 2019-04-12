@@ -21,10 +21,9 @@ import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
 import Options.Applicative                  hiding (columns)
 import System.FilePath                      ((</>))
 
-import qualified App.Commands.Options.Types as Z
-import qualified Codec.Archive.Tar          as F
-import qualified Codec.Archive.Tar.Entry    as F
-
+import qualified App.Commands.Options.Types        as Z
+import qualified Codec.Archive.Tar                 as F
+import qualified Codec.Archive.Tar.Entry           as F
 import qualified Codec.Compression.GZip            as F
 import qualified Control.Monad.Trans.AWS           as AWS
 import qualified Data.Aeson                        as A
@@ -50,12 +49,12 @@ logger _ _ = return ()
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
   let archiveUri = opts ^. the @"archiveUri"
-  lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
+  lbs <- LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
       envAws <- mkEnv (opts ^. the @"region") logger
-      let archivePath = homeDirectory <> "/.cabal/archive/" <> (planJson ^. the @"compilerId")
-      IO.createDirectoryIfMissing True (T.unpack archivePath)
+      let archivePath = homeDirectory </> ".cabal" </> "archive" </> (planJson ^. the @"compilerId" . to T.unpack)
+      IO.createDirectoryIfMissing True archivePath
       let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
@@ -76,19 +75,17 @@ runSyncToArchive opts = do
           _ -> return ()
 
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-        let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
-        let packageStorePath = baseDir <> "/" <> packageDir pInfo
-        packageStorePathExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
-
-
+        let archiveFile = archiveUri <> "/" <> T.pack (packageDir pInfo) <> ".tar.gz"
+        let packageStorePath = baseDir </> packageDir pInfo
+        packageStorePathExists <- IO.doesDirectoryExist packageStorePath
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
           CIO.putStrLn $ "Creating " <> archiveFile
-          entries <- F.pack (T.unpack baseDir) (relativePaths pInfo)
+          entries <- F.pack baseDir (relativePaths pInfo)
 
           let entries' = case confPath pInfo of
                           Nothing   -> entries
-                          Just conf -> updateEntryWith (== T.unpack conf) (templateConfig (T.unpack baseDir)) <$> entries
+                          Just conf -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
 
           IO.writeResource envAws archiveFile . F.compress . F.write $ entries
 
@@ -103,7 +100,7 @@ optsSyncToArchive = Z.SyncToArchiveOptions
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (homeDirectory <> "/.cabal/archive")
+      <>  value (T.pack $ homeDirectory </> ".cabal" </> "archive")
       )
   <*> strOption
       (   long "store-path"

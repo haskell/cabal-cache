@@ -91,6 +91,7 @@ library
       App.Static
       HaskellWorks.Ci.Assist.Core
       HaskellWorks.Ci.Assist.IO.Console
+      HaskellWorks.Ci.Assist.GhcPkg
       HaskellWorks.Ci.Assist.IO.Lazy
       HaskellWorks.Ci.Assist.Options
       HaskellWorks.Ci.Assist.PackageConfig

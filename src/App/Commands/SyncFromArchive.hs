@@ -23,6 +23,7 @@ import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
 import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
 import Network.AWS.Types                    (Region (Oregon))
 import Options.Applicative                  hiding (columns)
+import System.FilePath                      ((</>))
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
@@ -33,6 +34,7 @@ import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.ByteString.Lazy.Char8        as LBSC
 import qualified Data.Text                         as T
 import qualified Data.Text.IO                      as T
+import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
@@ -53,37 +55,29 @@ runSyncFromArchive opts = do
   let archiveUri = opts ^. the @"archiveUri"
   CIO.putStrLn $ "Archive URI: " <> archiveUri
 
-  hGhcPkg <- IO.spawnProcess "ghc-pkg" ["--version"]
+  GhcPkg.testAvailability
 
-  exitCodeGhcPkg <- IO.waitForProcess hGhcPkg
-
-  case exitCodeGhcPkg of
-    IO.ExitFailure _ -> do
-      CIO.hPutStrLn IO.stderr "ERROR: Unable to get ghc-pkg verson"
-      IO.exitWith (IO.ExitFailure 1)
-    _ -> return ()
-
-  lbs <- LBS.readFile "dist-newstyle/cache/plan.json"
+  lbs <- LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
   case A.eitherDecode lbs of
     Right (planJson :: Z.PlanJson) -> do
       env <- mkEnv (opts ^. the @"region") logger
       let archivePath                 = archiveUri <> "/" <> (planJson ^. the @"compilerId")
       let baseDir                     = opts ^. the @"storePath"
-      let storeCompilerPath           = baseDir <> "/" <> (planJson ^. the @"compilerId")
-      let storeCompilerPackageDbPath  = storeCompilerPath <> "/package.db"
-      let storeCompilerLibPath        = storeCompilerPath <> "/lib"
+      let storeCompilerPath           = baseDir </> (planJson ^. the @"compilerId" . to T.unpack)
+      let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+      let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
-      CIO.putStrLn "Creating store directories"
-      IO.createDirectoryIfMissing True (T.unpack baseDir)
-      IO.createDirectoryIfMissing True (T.unpack storeCompilerPath)
-      IO.createDirectoryIfMissing True (T.unpack storeCompilerLibPath)
+      IO.putStrLn "Creating store directories"
+      IO.createDirectoryIfMissing True baseDir
+      IO.createDirectoryIfMissing True storeCompilerPath
+      IO.createDirectoryIfMissing True storeCompilerLibPath
 
       packages <- getPackages baseDir planJson
 
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-        let archiveFile = archiveUri <> "/" <> packageDir pInfo <> ".tar.gz"
-        let packageStorePath = baseDir <> "/" <> packageDir pInfo
-        storeDirectoryExists <- IO.doesDirectoryExist (T.unpack packageStorePath)
+        let archiveFile = archiveUri <> "/" <> T.pack (packageDir pInfo) <> ".tar.gz"
+        let packageStorePath = baseDir </> packageDir pInfo
+        storeDirectoryExists <- IO.doesDirectoryExist packageStorePath
         arhiveFileExists <- runResourceT $ IO.resourceExists env archiveFile
         when (not storeDirectoryExists && arhiveFileExists) $ do
           runResAws env $ do
@@ -94,19 +88,14 @@ runSyncFromArchive opts = do
                 let entries = F.read (F.decompress archiveFileContents)
                 let entries' = case confPath pInfo of
                                   Nothing   -> entries
-                                  Just conf -> mapEntriesWith (== T.unpack conf) (unTemplateConfig (T.unpack baseDir)) entries
+                                  Just conf -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
 
-                liftIO $ F.unpack (T.unpack baseDir) entries'
+                liftIO $ F.unpack baseDir entries'
               Nothing -> do
                 liftIO $ CIO.putStrLn $ "Archive unavilable: " <> archiveFile
+
       CIO.putStrLn "Recaching package database"
-      hGhcPkg2 <- IO.spawnProcess "ghc-pkg" ["recache", "--package-db", T.unpack storeCompilerPackageDbPath]
-      exitCodeGhcPkg2 <- IO.waitForProcess hGhcPkg2
-      case exitCodeGhcPkg2 of
-        IO.ExitFailure _ -> do
-          CIO.hPutStrLn IO.stderr "ERROR: Unable to recache package db"
-          IO.exitWith (IO.ExitFailure 1)
-        _ -> return ()
+      GhcPkg.recache storeCompilerPackageDbPath
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
@@ -119,7 +108,7 @@ optsSyncFromArchive = Z.SyncFromArchiveOptions
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (homeDirectory <> "/.cabal/archive")
+      <>  value (T.pack $ homeDirectory </> ".cabal" </> "archive")
       )
   <*> strOption
       (   long "store-path"
