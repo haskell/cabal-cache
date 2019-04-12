@@ -8,7 +8,8 @@ module App.Commands.SyncFromArchive
   ) where
 
 import Antiope.Core                         (runResAws)
-import Antiope.Env                          (LogLevel, Region (..), mkEnv)
+import Antiope.Env                          (LogLevel, mkEnv)
+import App.Commands.Options.Parser          (optsSyncFromArchive)
 import App.Static                           (homeDirectory)
 import Control.Lens
 import Control.Monad                        (when)
@@ -99,38 +100,5 @@ runSyncFromArchive opts = do
 
   return ()
 
-optsSyncFromArchive :: Parser Z.SyncFromArchiveOptions
-optsSyncFromArchive = Z.SyncFromArchiveOptions
-  <$> strOption
-      (   long "archive-uri"
-      <>  help "Archive URI to sync to"
-      <>  metavar "S3_URI"
-      <>  value (T.pack $ homeDirectory </> ".cabal" </> "archive")
-      )
-  <*> strOption
-      (   long "store-path"
-      <>  help "Path to cabal store"
-      <>  metavar "DIRECTORY"
-      <>  value (homeDirectory <> "/.cabal/store")
-      )
-  <*> option auto
-      (   long "threads"
-      <>  help "Number of concurrent threads"
-      <>  metavar "NUM_THREADS"
-      <>  value 4
-      )
-  <*> readOrFromTextOption
-      (  long "region"
-      <> short 'r'
-      <> metavar "AWS_REGION"
-      <> showDefault <> value Oregon
-      <> help "The AWS region in which to operate"
-      )
-
 cmdSyncFromArchive :: Mod CommandFields (IO ())
 cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
-
-modifyEndpoint :: AWS.Service -> AWS.Service
-modifyEndpoint s = if s ^. to AWS._svcAbbrev == "s3"
-  then AWS.setEndpoint True "s3.ap-southeast-2.amazonaws.com" 443 s
-  else s

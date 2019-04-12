@@ -85,6 +85,7 @@ library
           , zlib
   exposed-modules:
       App.Commands
+      App.Commands.Options.Parser
       App.Commands.Options.Types
       App.Commands.SyncFromArchive
       App.Commands.SyncToArchive

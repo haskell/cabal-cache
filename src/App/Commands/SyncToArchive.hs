@@ -7,7 +7,8 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import Antiope.Env                          (LogLevel, Region (..), mkEnv)
+import Antiope.Env                          (LogLevel, mkEnv)
+import App.Commands.Options.Parser          (optsSyncToArchive)
 import App.Static                           (homeDirectory)
 import Control.Lens
 import Control.Monad                        (when)
@@ -51,7 +52,7 @@ runSyncToArchive opts = do
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      env <- mkEnv (opts ^. the @"region") logger
+      envAws <- mkEnv (opts ^. the @"region") logger
       let archivePath = homeDirectory </> ".cabal" </> "archive" </> (planJson ^. the @"compilerId" . to T.unpack)
       IO.createDirectoryIfMissing True archivePath
       let baseDir = opts ^. the @"storePath"
@@ -93,38 +94,5 @@ runSyncToArchive opts = do
 
   return ()
 
-optsSyncToArchive :: Parser Z.SyncToArchiveOptions
-optsSyncToArchive = Z.SyncToArchiveOptions
-  <$> strOption
-      (   long "archive-uri"
-      <>  help "Archive URI to sync to"
-      <>  metavar "S3_URI"
-      <>  value (T.pack $ homeDirectory </> ".cabal" </> "archive")
-      )
-  <*> strOption
-      (   long "store-path"
-      <>  help "Path to cabal store"
-      <>  metavar "DIRECTORY"
-      <>  value (homeDirectory <> "/.cabal/store")
-      )
-  <*> option auto
-      (   long "threads"
-      <>  help "Number of concurrent threads"
-      <>  metavar "NUM_THREADS"
-      <>  value 4
-      )
-  <*> readOrFromTextOption
-      (  long "region"
-      <> short 'r'
-      <> metavar "AWS_REGION"
-      <> showDefault <> value Oregon
-      <> help "The AWS region in which to operate"
-      )
-
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive
-
-modifyEndpoint :: AWS.Service -> AWS.Service
-modifyEndpoint s = if s ^. to AWS._svcAbbrev == "s3"
-  then AWS.setEndpoint True "s3.ap-southeast-2.amazonaws.com" 443 s
-  else s
