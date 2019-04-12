@@ -7,12 +7,12 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
-import Antiope.Env
-import App.Static
+import Antiope.Env                          (LogLevel, Region (..), mkEnv)
+import App.Static                           (homeDirectory)
 import Control.Lens
-import Control.Monad
-import Control.Monad.Trans.Resource
-import Data.Generics.Product.Any
+import Control.Monad                        (when)
+import Control.Monad.Trans.Resource         (runResourceT)
+import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core
 import HaskellWorks.Ci.Assist.Options
@@ -26,7 +26,6 @@ import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Archive.Tar.Entry           as F
 import qualified Codec.Compression.GZip            as F
 import qualified Control.Monad.Trans.AWS           as AWS
-import qualified Data.Aeson                        as A
 import qualified Data.ByteString.Lazy              as LBS
 import qualified Data.ByteString.Lazy.Char8        as LBSC
 import qualified Data.Text                         as T
@@ -49,10 +48,10 @@ logger _ _ = return ()
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
   let archiveUri = opts ^. the @"archiveUri"
-  lbs <- LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
-  case A.eitherDecode lbs of
-    Right (planJson :: Z.PlanJson) -> do
-      envAws <- mkEnv (opts ^. the @"region") logger
+  mbPlan <- loadPlan
+  case mbPlan of
+    Right planJson -> do
+      env <- mkEnv (opts ^. the @"region") logger
       let archivePath = homeDirectory </> ".cabal" </> "archive" </> (planJson ^. the @"compilerId" . to T.unpack)
       IO.createDirectoryIfMissing True archivePath
       let baseDir = opts ^. the @"storePath"

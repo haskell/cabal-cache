@@ -5,31 +5,30 @@
 {-# LANGUAGE FlexibleContexts      #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE TypeApplications      #-}
-
 module HaskellWorks.Ci.Assist.Core
   ( PackageInfo(..)
   , getPackages
   , relativePaths
+  , loadPlan
   ) where
 
-import Control.DeepSeq
+import Control.DeepSeq           (NFData)
 import Control.Lens              hiding ((<.>))
-import Control.Monad
-import Data.Aeson
-import Data.Bool
-import Data.Generics.Product.Any
-import Data.Maybe
+import Control.Monad             (forM)
+import Data.Aeson                (eitherDecode)
+import Data.Bool                 (bool)
+import Data.Generics.Product.Any (the)
+import Data.Maybe                (maybeToList)
 import Data.Semigroup            ((<>))
 import Data.Text                 (Text)
-import GHC.Generics
+import GHC.Generics              (Generic)
 import System.FilePath           ((<.>), (</>))
 
+import qualified Data.ByteString.Lazy         as LBS
 import qualified Data.List                    as List
 import qualified Data.Text                    as T
-import qualified HaskellWorks.Ci.Assist.Text  as T
 import qualified HaskellWorks.Ci.Assist.Types as Z
 import qualified System.Directory             as IO
-import qualified System.IO                    as IO
 
 type CompilerId = Text
 type PackageId  = Text
@@ -60,6 +59,11 @@ getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId
         predicate :: Z.Package -> Bool
         predicate package = package ^. the @"packageType" /= "pre-existing" && package ^. the @"style" == Just "global"
 
+loadPlan :: IO (Either String Z.PlanJson)
+loadPlan =
+  eitherDecode <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
+
+-------------------------------------------------------------------------------
 mkPackageInfo :: FilePath -> CompilerId -> Z.Package -> IO PackageInfo
 mkPackageInfo basePath cid pkg = do
   let pid               = pkg ^. the @"id"
@@ -82,4 +86,4 @@ mkPackageInfo basePath cid pkg = do
 
 getLibFiles :: FilePath -> FilePath -> Text -> IO [Library]
 getLibFiles relativeLibPath libPath libPrefix =
-  fmap (relativeLibPath </>) . mfilter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
+  fmap (relativeLibPath </>) . filter (List.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
