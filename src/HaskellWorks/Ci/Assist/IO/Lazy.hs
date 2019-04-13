@@ -11,6 +11,7 @@ module HaskellWorks.Ci.Assist.IO.Lazy
 import Antiope.Core
 import Antiope.S3.Lazy
 import Control.Lens
+import Control.Monad                   (void)
 import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.IO.Class
@@ -41,13 +42,13 @@ import qualified System.IO                 as IO
 
 readResource :: MonadResource m => AWS.Env -> Location -> m (Maybe LBS.ByteString)
 readResource envAws = \case
-  S3Location s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
-  Local path       -> liftIO $ Just <$> LBS.readFile path
+  S3 s3Uri    -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
+  Local path  -> liftIO $ Just <$> LBS.readFile path
 
 resourceExists :: (MonadResource m, MonadCatch m, MonadIO m) => AWS.Env -> Location -> m Bool
 resourceExists envAws = \case
-  S3Location s3Uri -> isRight <$> headS3Uri envAws s3Uri
-  Local path -> liftIO $ IO.doesFileExist path
+  S3 s3Uri    -> isRight <$> headS3Uri envAws s3Uri
+  Local path  -> liftIO $ IO.doesFileExist path
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
 headS3Uri envAws (AWS.S3Uri b k) =
@@ -62,11 +63,10 @@ chunkSize = AWS.ChunkSize (1024 * 1024)
 uploadeToS3 :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m ()
 uploadeToS3 envAws (AWS.S3Uri b k) lbs = do
   let req = AWS.toBody lbs
-  let po = AWS.putObject b k req
-  result <- runResAws envAws $ AWS.send po
-  return ()
+  let po  = AWS.putObject b k req
+  void $ runResAws envAws $ AWS.send po
 
 writeResource :: MonadUnliftIO m => AWS.Env -> Location -> LBS.ByteString -> m ()
 writeResource envAws loc lbs = case loc of
-  S3Location s3Uri -> uploadeToS3 envAws s3Uri lbs
-  Local path       -> liftIO $ LBS.writeFile path lbs
+  S3 s3Uri   -> uploadeToS3 envAws s3Uri lbs
+  Local path -> liftIO $ LBS.writeFile path lbs

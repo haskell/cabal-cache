@@ -27,20 +27,20 @@ infixr 5 </>
 infixr 7 <.>
 
 data Location
-  = S3Location S3Uri
+  = S3 S3Uri
   | Local FilePath
   deriving (Show, Eq, Generic)
 
 instance ToText Location where
-  toText (S3Location uri) = toText uri
-  toText (Local p)        = Text.pack p
+  toText (S3 uri)   = toText uri
+  toText (Local p)  = Text.pack p
 
 instance IsPath Location Text where
-  (S3Location b) </> p = S3Location (b </> p)
-  (Local b)      </> p = Local      (b </> Text.unpack p)
+  (S3 b)    </> p = S3    (b </> p)
+  (Local b) </> p = Local (b </> Text.unpack p)
 
-  (S3Location b) <.> e = S3Location (b <.> e)
-  (Local b)      <.> e = Local      (b <.> Text.unpack e)
+  (S3 b)    <.> e = S3    (b <.> e)
+  (Local b) <.> e = Local (b <.> Text.unpack e)
 
 instance IsPath Text Text where
   b </> p = Text.pack (Text.unpack b FP.</> Text.unpack p)
@@ -59,7 +59,7 @@ instance IsPath S3Uri Text where
 
 toLocation :: Text -> Maybe Location
 toLocation txt = if
-  | Text.isPrefixOf "s3://" txt'    -> either (const Nothing) (Just . S3Location) (fromText txt')
+  | Text.isPrefixOf "s3://" txt'    -> either (const Nothing) (Just . S3) (fromText txt')
   | Text.isPrefixOf "file://" txt'  -> Just (Local (Text.unpack txt'))
   | Text.isInfixOf  "://" txt'      -> Nothing
   | otherwise                       -> Just (Local (Text.unpack txt'))

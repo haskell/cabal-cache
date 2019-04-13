@@ -40,20 +40,20 @@ localPath = do
 
 location :: MonadGen m => m Location
 location =
-  Gen.choice [S3Location <$> s3Uri, Local <$> localPath]
+  Gen.choice [S3 <$> s3Uri, Local <$> localPath]
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.LocationSpec" $ do
-  it "S3Location should roundtrip from and to text" $ require $ property $ do
+  it "S3 should roundtrip from and to text" $ require $ property $ do
     uri <- forAll s3Uri
-    tripping (S3Location uri) toText toLocation
+    tripping (S3 uri) toText toLocation
 
   it "LocalLocation should roundtrip from and to text" $ require $ property $ do
     path <- forAll localPath
     tripping (Local path) toText toLocation
 
   it "Should append s3 path" $ require $ property $ do
-    loc  <- S3Location <$> forAll s3Uri
+    loc  <- S3 <$> forAll s3Uri
     part <- forAll $ Gen.text (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.text (Range.linear 2 4)  Gen.alphaNum
     toText (loc </> part <.> ext) === (toText loc) <> "/" <> part <> "." <> ext
