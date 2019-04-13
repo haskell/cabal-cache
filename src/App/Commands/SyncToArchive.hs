@@ -12,7 +12,7 @@ import Antiope.Env                          (LogLevel, mkEnv)
 import App.Commands.Options.Parser          (optsSyncToArchive)
 import App.Static                           (homeDirectory)
 import Control.Lens                         hiding ((<.>))
-import Control.Monad                        (when)
+import Control.Monad                        (when, unless)
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
@@ -27,11 +27,11 @@ import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Compression.GZip            as F
 import qualified Data.Text                         as T
+import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
 import qualified System.IO                         as IO
-import qualified System.Process                    as IO
 import qualified UnliftIO.Async                    as IO
 
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
@@ -49,21 +49,13 @@ runSyncToArchive opts = do
       let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
-      let storeCompilerPath           = baseDir <> "/" <> (planJson ^. the @"compilerId")
-      let storeCompilerPackageDbPath  = storeCompilerPath <> "/package.db"
+      let storeCompilerPath           = baseDir </> (planJson ^. the @"compilerId" . to T.unpack)
+      let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
 
-      storeCompilerPackageDbPathExists <- IO.doesDirectoryExist (T.unpack storeCompilerPackageDbPath)
+      storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
 
-      unless storeCompilerPackageDbPathExists $ do
-        CIO.putStrLn "Package DB missing.  Creating Package DB"
-        hGhcPkg <- IO.spawnProcess "ghc-pkg" ["init", T.unpack storeCompilerPackageDbPath]
-
-        exitCodeGhcPkg <- IO.waitForProcess hGhcPkg
-        case exitCodeGhcPkg of
-          IO.ExitFailure _ -> do
-            CIO.hPutStrLn IO.stderr "ERROR: Failed to create Package DB"
-            IO.exitWith (IO.ExitFailure 1)
-          _ -> return ()
+      unless storeCompilerPackageDbPathExists $
+        GhcPkg.init storeCompilerPackageDbPath
 
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"

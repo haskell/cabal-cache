@@ -23,3 +23,6 @@ testAvailability = runGhcPkg ["--version"]
 
 recache :: FilePath -> IO ()
 recache packageDb = runGhcPkg ["recache", "--package-db", packageDb]
+
+init :: FilePath -> IO ()
+init packageDb = runGhcPkg ["init", packageDb]
