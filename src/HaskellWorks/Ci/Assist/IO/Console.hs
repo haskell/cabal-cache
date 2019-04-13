@@ -5,9 +5,10 @@ module HaskellWorks.Ci.Assist.IO.Console
   , hPrint
   ) where
 
-import Control.Exception (bracket_)
-import Data.Text         (Text)
-import Prelude           (IO, Show (..), ($))
+import Control.Exception      (bracket_)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Text              (Text)
+import Prelude                (IO, Show (..), ($), (.))
 
 import qualified Control.Concurrent.QSem as IO
 import qualified Data.Text               as T
@@ -22,14 +23,14 @@ sem = IO.unsafePerformIO $ IO.newQSem 1
 consoleBracket :: IO a -> IO a
 consoleBracket = bracket_ (IO.waitQSem sem) (IO.signalQSem sem)
 
-putStrLn :: Text -> IO ()
-putStrLn text = consoleBracket $ T.putStrLn text
+putStrLn :: MonadIO m => Text -> m ()
+putStrLn = liftIO . consoleBracket . T.putStrLn
 
-print :: Show a => a -> IO ()
-print a = consoleBracket $ IO.print a
+print :: (MonadIO m, Show a) => a -> m ()
+print = liftIO . consoleBracket . IO.print
 
-hPutStrLn :: IO.Handle -> Text -> IO ()
-hPutStrLn h text = consoleBracket $ T.hPutStrLn h text
+hPutStrLn :: MonadIO m => IO.Handle -> Text -> m ()
+hPutStrLn h = liftIO . consoleBracket . T.hPutStrLn h
 
-hPrint :: Show a => IO.Handle -> a -> IO ()
-hPrint h a = consoleBracket $ IO.hPrint h a
+hPrint :: (MonadIO m, Show a) => IO.Handle -> a -> m ()
+hPrint h = liftIO . consoleBracket . IO.hPrint h

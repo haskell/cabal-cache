@@ -7,35 +7,29 @@ module App.Commands.SyncToArchive
   ( cmdSyncToArchive
   ) where
 
+import Antiope.Core                         (toText)
 import Antiope.Env                          (LogLevel, mkEnv)
 import App.Commands.Options.Parser          (optsSyncToArchive)
 import App.Static                           (homeDirectory)
-import Control.Lens
+import Control.Lens                         hiding ((<.>))
 import Control.Monad                        (when)
 import Control.Monad.Trans.Resource         (runResourceT)
 import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
-import HaskellWorks.Ci.Assist.Core
-import HaskellWorks.Ci.Assist.Options
+import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), getPackages, loadPlan, relativePaths)
+import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
 import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
 import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
 import Options.Applicative                  hiding (columns)
-import System.FilePath                      ((</>))
+import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
-import qualified Codec.Archive.Tar.Entry           as F
 import qualified Codec.Compression.GZip            as F
-import qualified Control.Monad.Trans.AWS           as AWS
-import qualified Data.ByteString.Lazy              as LBS
-import qualified Data.ByteString.Lazy.Char8        as LBSC
 import qualified Data.Text                         as T
-import qualified Data.Text.IO                      as T
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
 import qualified HaskellWorks.Ci.Assist.IO.Lazy    as IO
 import qualified HaskellWorks.Ci.Assist.Types      as Z
-import qualified System.Directory                  as IO
-import qualified System.Exit                       as IO
 import qualified System.IO                         as IO
 import qualified System.Process                    as IO
 import qualified UnliftIO.Async                    as IO
@@ -43,18 +37,15 @@ import qualified UnliftIO.Async                    as IO
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant do"        :: String) #-}
 
-logger :: LogLevel -> LBSC.ByteString -> IO ()
-logger _ _ = return ()
-
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
   let archiveUri = opts ^. the @"archiveUri"
   mbPlan <- loadPlan
   case mbPlan of
     Right planJson -> do
-      envAws <- mkEnv (opts ^. the @"region") logger
+      envAws <- mkEnv (opts ^. the @"region") (\_ _ -> pure ())
       let archivePath = homeDirectory </> ".cabal" </> "archive" </> (planJson ^. the @"compilerId" . to T.unpack)
-      IO.createDirectoryIfMissing True archivePath
+      createDirectoryIfMissing True archivePath
       let baseDir = opts ^. the @"storePath"
       packages <- getPackages baseDir planJson
 
@@ -75,12 +66,12 @@ runSyncToArchive opts = do
           _ -> return ()
 
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-        let archiveFile = archiveUri <> "/" <> T.pack (packageDir pInfo) <> ".tar.gz"
+        let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
         let packageStorePath = baseDir </> packageDir pInfo
-        packageStorePathExists <- IO.doesDirectoryExist packageStorePath
+        packageStorePathExists <- doesDirectoryExist packageStorePath
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
         when (not archiveFileExists && packageStorePathExists) $ do
-          CIO.putStrLn $ "Creating " <> archiveFile
+          CIO.putStrLn $ "Creating " <> toText archiveFile
           entries <- F.pack baseDir (relativePaths pInfo)
 
           let entries' = case confPath pInfo of

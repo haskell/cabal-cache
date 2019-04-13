@@ -1,6 +1,6 @@
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
-
 module HaskellWorks.Ci.Assist.IO.Lazy
   ( readResource
   , resourceExists
@@ -15,10 +15,12 @@ import Control.Monad.Catch
 import Control.Monad.Except
 import Control.Monad.IO.Class
 import Control.Monad.Trans.Resource
-import Data.Conduit.Lazy            (lazyConsume)
-import Data.Text                    (Text)
-import Network.AWS                  (MonadAWS, chunkedFile)
-import Network.AWS.Data.Body        (_streamBody)
+import Data.Conduit.Lazy               (lazyConsume)
+import Data.Either                     (isRight)
+import Data.Text                       (Text)
+import HaskellWorks.Ci.Assist.Location (Location (..))
+import Network.AWS                     (MonadAWS, chunkedFile)
+import Network.AWS.Data.Body           (_streamBody)
 
 import qualified Antiope.S3.Lazy           as AWS
 import qualified Antiope.S3.Types          as AWS
@@ -37,17 +39,15 @@ import qualified System.IO                 as IO
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
 
-readResource :: MonadResource m => AWS.Env -> Text -> m (Maybe LBS.ByteString)
-readResource envAws resourceUri = case AWS.fromText resourceUri of
-  Right s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
-  Left _      -> liftIO $ Just <$> LBS.readFile (T.unpack resourceUri)
+readResource :: MonadResource m => AWS.Env -> Location -> m (Maybe LBS.ByteString)
+readResource envAws = \case
+  S3Location s3Uri -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
+  Local path       -> liftIO $ Just <$> LBS.readFile path
 
-resourceExists :: (MonadResource m, MonadCatch m, MonadIO m) => AWS.Env -> Text -> m Bool
-resourceExists envAws resourceUri = case AWS.fromText resourceUri of
-  Right s3Uri -> do
-    result <- headS3Uri envAws s3Uri
-    return (either (const False) (const True) result)
-  Left x -> liftIO $ IO.doesFileExist (T.unpack resourceUri)
+resourceExists :: (MonadResource m, MonadCatch m, MonadIO m) => AWS.Env -> Location -> m Bool
+resourceExists envAws = \case
+  S3Location s3Uri -> isRight <$> headS3Uri envAws s3Uri
+  Local path -> liftIO $ IO.doesFileExist path
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
 headS3Uri envAws (AWS.S3Uri b k) =
@@ -66,7 +66,7 @@ uploadeToS3 envAws (AWS.S3Uri b k) lbs = do
   result <- runResAws envAws $ AWS.send po
   return ()
 
-writeResource :: MonadUnliftIO m => AWS.Env -> Text -> LBS.ByteString -> m ()
-writeResource envAws resourceUri lbs = case AWS.fromText resourceUri of
-  Right s3Uri -> uploadeToS3 envAws s3Uri lbs
-  Left _      -> liftIO $ LBS.writeFile (T.unpack resourceUri) lbs
+writeResource :: MonadUnliftIO m => AWS.Env -> Location -> LBS.ByteString -> m ()
+writeResource envAws loc lbs = case loc of
+  S3Location s3Uri -> uploadeToS3 envAws s3Uri lbs
+  Local path       -> liftIO $ LBS.writeFile path lbs
