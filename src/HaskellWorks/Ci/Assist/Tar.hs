@@ -3,6 +3,7 @@ where
 
 import Codec.Archive.Tar
 import Codec.Archive.Tar.Entry
+import Data.Either             (fromRight)
 
 import qualified Data.ByteString.Lazy as LBS
 
@@ -25,3 +26,13 @@ mapEntriesWith :: (FilePath -> Bool)
   -> Entries e
 mapEntriesWith pred transform =
   mapEntriesNoFail (updateEntryWith pred transform)
+
+rewritePath :: (FilePath -> FilePath) -> Entry -> Entry
+rewritePath transform entry =
+  let
+    tp = entryTarPath entry
+    isDir = entryContent entry == Directory
+    fp = fromTarPath tp
+    tp' = fromRight tp (toTarPath isDir (transform fp))
+  in entry { entryTarPath = tp' }
+

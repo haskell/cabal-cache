@@ -18,15 +18,17 @@ import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
-import HaskellWorks.Ci.Assist.PackageConfig (templateConfig)
+import HaskellWorks.Ci.Assist.PackageConfig (replacePrefix, templateConfig)
 import HaskellWorks.Ci.Assist.Show
-import HaskellWorks.Ci.Assist.Tar           (updateEntryWith)
+import HaskellWorks.Ci.Assist.Tar           (rewritePath, updateEntryWith)
 import Options.Applicative                  hiding (columns)
 import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
+import System.FilePath                      (makeRelative)
 
 import qualified App.Commands.Options.Types        as Z
 import qualified Codec.Archive.Tar                 as F
 import qualified Codec.Compression.GZip            as F
+import qualified Data.List                         as List
 import qualified Data.Text                         as T
 import qualified HaskellWorks.Ci.Assist.GhcPkg     as GhcPkg
 import qualified HaskellWorks.Ci.Assist.IO.Console as CIO
@@ -65,6 +67,7 @@ runSyncToArchive opts = do
       IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         let archiveFile = archiveUri </> T.pack (packageDir pInfo) <.> ".tar.gz"
         let packageStorePath = baseDir </> packageDir pInfo
+
         packageStorePathExists <- doesDirectoryExist packageStorePath
         archiveFileExists <- runResourceT $ IO.resourceExists envAws archiveFile
 
@@ -72,11 +75,13 @@ runSyncToArchive opts = do
           CIO.putStrLn $ "Creating " <> toText archiveFile
           entries <- F.pack baseDir (relativePaths pInfo)
 
+          let shortPath = (planJson ^. the @"compilerId" . to T.unpack) </> "pkg"
           let entries' = case confPath pInfo of
                           Nothing   -> entries
-                          Just conf -> updateEntryWith (== conf) (templateConfig baseDir) <$> entries
+                          Just conf -> entries <&> updateEntryWith (== conf) (templateConfig baseDir)
 
-          IO.writeResource envAws archiveFile . F.compress . F.write $ entries
+          let entries'' = entries' <&> rewritePath (replacePrefix (packageDir pInfo) shortPath)
+          IO.writeResource envAws archiveFile . F.compress . F.write $ entries'
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage

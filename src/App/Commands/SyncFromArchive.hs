@@ -11,6 +11,7 @@ import Antiope.Core                         (runResAws, toText)
 import Antiope.Env                          (LogLevel, mkEnv)
 import App.Commands.Options.Parser          (optsSyncFromArchive)
 import App.Static                           (homeDirectory)
+import Codec.Archive.Tar                    (mapEntriesNoFail)
 import Control.Lens                         hiding ((<.>))
 import Control.Monad                        (unless, when)
 import Control.Monad.IO.Class               (liftIO)
@@ -19,8 +20,8 @@ import Data.Generics.Product.Any            (the)
 import Data.Semigroup                       ((<>))
 import HaskellWorks.Ci.Assist.Core          (PackageInfo (..), getPackages, loadPlan)
 import HaskellWorks.Ci.Assist.Location      ((<.>), (</>))
-import HaskellWorks.Ci.Assist.PackageConfig (unTemplateConfig)
-import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith)
+import HaskellWorks.Ci.Assist.PackageConfig (replacePrefix, unTemplateConfig)
+import HaskellWorks.Ci.Assist.Tar           (mapEntriesWith, rewritePath)
 import Network.AWS.Types                    (Region (Oregon))
 import Options.Applicative                  hiding (columns)
 import System.Directory                     (createDirectoryIfMissing, doesDirectoryExist)
@@ -80,12 +81,16 @@ runSyncFromArchive opts = do
             case maybeArchiveFileContents of
               Just archiveFileContents -> do
                 CIO.putStrLn $ "Extracting " <> toText archiveFile
+
+                let shortPath = (planJson ^. the @"compilerId" . to T.unpack) </> "pkg"
                 let entries = F.read (F.decompress archiveFileContents)
                 let entries' = case confPath pInfo of
-                                  Nothing   -> entries
-                                  Just conf -> mapEntriesWith (== conf) (unTemplateConfig baseDir) entries
+                                Nothing   -> entries
+                                Just conf -> entries & mapEntriesWith (== conf) (unTemplateConfig baseDir)
 
-                liftIO $ F.unpack baseDir entries'
+                let entries'' = entries & mapEntriesNoFail (rewritePath (replacePrefix shortPath (packageDir pInfo)))
+
+                liftIO $ F.unpack baseDir entries''
               Nothing -> do
                 CIO.putStrLn $ "Archive unavilable: " <> toText archiveFile
 
