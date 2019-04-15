@@ -1,1 +1,6 @@
 packages: .
+
+source-repository-package
+  type: git
+  location: git@github.com:haskell-works/tar.git
+  tag: 8c871eb7b31c6a93990a1024ecbe990aaf825f8f
