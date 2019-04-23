@@ -9,6 +9,33 @@ workflows:
   multiple-ghc-build:
     jobs:
       - haskell/build:
+          name: Darwin
+          executor: darwin
+          run-tests: false
+          fail-incoherent-builds: false
+          write-result-workspace: true
+          after-checkout:
+            - restore_cache:
+                keys:
+                  - homebrew-itself-cache
+            - run:
+                name: Install GHC
+                command: brew install jq md5sha1sum ghc cabal-install
+
+            - save_cache:
+                key: homebrew-itself-cache
+                # I cache Homebrew itself, not the stuff that is installed with it
+                # because brew update takes up to 4 minutes for some reason.
+                paths: [/usr/local/Homebrew]
+
+            - run:
+                name: Install cabal-plan
+                command: |
+                  curl -L https://github.com/haskell-works/cabal-plan/releases/download/v0.5.0.0/cabal-plan_x86_osx.tar.gz -o cabal-plan_x86_osx.tar.gz
+                  tar zxvf cabal-plan_x86_osx.tar.gz -C /usr/local/bin cabal-plan
+                  rm cabal-plan_x86_osx.tar.gz
+
+      - haskell/build:
           name: GHC 8.6.4
           executor: haskell/ghc-8_6_4
           write-result-workspace: true
