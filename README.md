@@ -16,7 +16,7 @@ Several installation methods are available.
 ### From source
 
 ```bash
-git new-install cabal-cache
+cabal new-install cabal-cache
 ```
 
 ### Ubuntu binaries
