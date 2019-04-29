@@ -5,6 +5,11 @@ orbs:
   github: haskell-works/github-release@1.3.0
   hackage: haskell-works/hackage@1.1.0
 
+executors:
+  ghc-8_6_3_ubuntu_16_04:
+    docker:
+      - image: quay.io/haskell_works/ghc-8.6.3:ubuntu-16.04
+
 workflows:
   multiple-ghc-build:
     jobs:
@@ -27,6 +32,29 @@ workflows:
                 name: Prepare environment for release
                 command: |
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./build/dist/ ./${BUILD_EXE_NAME}
+          filters:
+            branches:
+              only: master
+
+      - haskell/build:
+          name: GHC 8.6.5 Ubuntu 16.04
+          executor: ghc-8_6_3_ubuntu_16_04
+          context: haskell-ci
+          write-result-workspace: true
+
+      - github/release-cabal:
+          context: haskell-ci
+          name: GitHub Release Ubuntu 16.04
+          attach-workspace: true
+          source-env-file: ./build/project.env
+          requires:
+            - GHC 8.6.5 Ubuntu 16.04
+          checkout: true
+          before-release:
+            - run:
+                name: Prepare environment for release
+                command: |
+                  tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}_ubuntu-16.04.tar.gz -C ./build/dist/ ./${BUILD_EXE_NAME}
           filters:
             branches:
               only: master
