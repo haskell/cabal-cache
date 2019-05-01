@@ -5,24 +5,26 @@
 module HaskellWorks.CabalCache.Types where
 
 import Data.Aeson
+import Data.Maybe   (fromMaybe)
 import Data.Text    (Text)
 import GHC.Generics
 
-type PackageId = Text
+type CompilerId = Text
+type PackageId  = Text
 
 data PlanJson = PlanJson
-  { compilerId  :: Text
+  { compilerId  :: CompilerId
   , installPlan :: [Package]
   } deriving (Eq, Show, Generic)
 
 data Package = Package
   { packageType   :: Text
-  , id            :: Text
+  , id            :: PackageId
   , name          :: Text
   , version       :: Text
   , style         :: Maybe Text
   , componentName :: Maybe Text
-  , depends       :: Maybe [PackageId]
+  , depends       :: [Text]
   } deriving (Eq, Show, Generic)
 
 instance FromJSON PlanJson where
@@ -38,4 +40,4 @@ instance FromJSON Package where
     <*> v .:  "pkg-version"
     <*> v .:? "style"
     <*> v .:? "component-name"
-    <*> v .:? "depends"
+    <*> (fromMaybe [] <$> (v .:?  "depends"))

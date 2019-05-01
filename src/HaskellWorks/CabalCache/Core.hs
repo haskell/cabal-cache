@@ -33,8 +33,6 @@ import qualified HaskellWorks.CabalCache.IO.Tar as IO
 import qualified HaskellWorks.CabalCache.Types  as Z
 import qualified System.Directory               as IO
 
-type CompilerId = Text
-type PackageId  = Text
 type PackageDir = FilePath
 type ConfPath   = FilePath
 type Library    = FilePath
@@ -47,8 +45,8 @@ data Tagged a t = Tagged
   } deriving (Eq, Show, Generic, NFData)
 
 data PackageInfo = PackageInfo
-  { compilerId :: CompilerId
-  , packageId  :: PackageId
+  { compilerId :: Z.CompilerId
+  , packageId  :: Z.PackageId
   , packageDir :: PackageDir
   , confPath   :: Tagged ConfPath Presence
   , libs       :: [Library]
@@ -77,7 +75,7 @@ loadPlan =
   eitherDecode <$> LBS.readFile ("dist-newstyle" </> "cache" </> "plan.json")
 
 -------------------------------------------------------------------------------
-mkPackageInfo :: FilePath -> CompilerId -> Z.Package -> IO PackageInfo
+mkPackageInfo :: FilePath -> Z.CompilerId -> Z.Package -> IO PackageInfo
 mkPackageInfo basePath cid pkg = do
   let pid               = pkg ^. the @"id"
   let compilerPath      = basePath </> T.unpack cid
