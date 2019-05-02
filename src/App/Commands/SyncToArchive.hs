@@ -12,7 +12,7 @@ import Antiope.Env                      (LogLevel (..), mkEnv)
 import App.Commands.Options.Parser      (optsSyncToArchive)
 import App.Static                       (homeDirectory)
 import Control.Lens                     hiding ((<.>))
-import Control.Monad                    (unless, when)
+import Control.Monad                    (filterM, unless, when)
 import Control.Monad.Except
 import Control.Monad.Trans.Resource     (runResourceT)
 import Data.Generics.Product.Any        (the)
@@ -23,6 +23,7 @@ import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
 import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              hiding (columns)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
@@ -32,6 +33,7 @@ import qualified Codec.Archive.Tar                  as F
 import qualified Codec.Compression.GZip             as F
 import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
+import qualified Data.Set                           as Set
 import qualified Data.Text                          as T
 import qualified Data.Text.Encoding                 as T
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
@@ -80,7 +82,9 @@ runSyncToArchive opts = do
       IO.createLocalDirectoryIfMissing scopedArchivePath
       CIO.putStrLn "Extracting package list"
 
-      packages <- getPackages storePath planJson
+      packages     <- getPackages storePath planJson
+      nonShareable <- packages & filterM (fmap not . isShareable storePath)
+      let planData = buildPlanData planJson (nonShareable ^.. each . the @"packageId")
 
       let storeCompilerPath           = storePath </> T.unpack compilerId
       let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
@@ -121,14 +125,18 @@ runSyncToArchive opts = do
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
 
-              shareEntries <- (\\ ["doc"]) <$> IO.listMaybeDirectory packageSharePath
-
-              when (null shareEntries) $ IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
+              when (canShare planData (packageId pInfo)) $
+                IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
 
     Left errorMessage -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
 
   return ()
+
+isShareable :: MonadIO m => FilePath -> PackageInfo -> m Bool
+isShareable storePath pkg =
+  let packageSharePath = storePath </> packageDir pkg </> "share"
+  in IO.listMaybeDirectory packageSharePath <&> (\\ ["doc"]) <&> null
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive

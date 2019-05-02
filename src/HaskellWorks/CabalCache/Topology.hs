@@ -5,6 +5,7 @@
 module HaskellWorks.CabalCache.Topology
 ( PlanData(..)
 , buildPlanData
+, canShare
 )
 where
 
@@ -32,13 +33,16 @@ data PlanData = PlanData
   } deriving Generic
 
 buildPlanData :: PlanJson   -- ^ The original plan
-  -> [Package]              -- ^ Packages that are known to be non-shareable
+  -> [PackageId]              -- ^ Packages that are known to be non-shareable
   -> PlanData               -- ^ Updated plan
 buildPlanData plan nonShareablePkgs =
   let
     dm = dependenciesMap (plan ^. the @"installPlan")
-    ns = (nonShareablePkgs <&> view (the @"id"))
-  in buildPlanData' dm ns
+  in buildPlanData' dm nonShareablePkgs
+
+canShare :: PlanData -> PackageId -> Bool
+canShare planData pkgId =
+  Set.notMember pkgId (nonShareable planData)
 
 -------------------------------------------------------------------------------
 

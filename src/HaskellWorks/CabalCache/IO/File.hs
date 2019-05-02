@@ -24,7 +24,7 @@ copyDirectoryRecursive source target = do
     IO.ExitSuccess   -> return ()
     IO.ExitFailure n -> throwError ""
 
-listMaybeDirectory :: MonadIO m => FilePath -> ExceptT String m [FilePath]
+listMaybeDirectory :: MonadIO m => FilePath -> m [FilePath]
 listMaybeDirectory filepath = do
   exists <- liftIO $ IO.doesDirectoryExist filepath
   if exists
