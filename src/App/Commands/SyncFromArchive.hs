@@ -23,6 +23,7 @@ import Data.List                        (nub, sort)
 import Data.Maybe
 import Data.Semigroup                   ((<>))
 import Data.Text                        (Text)
+import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan)
 import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept, maybeToExceptM)
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
@@ -163,13 +164,13 @@ runSyncFromArchive opts = do
 
                           case maybeArchiveFileContents of
                             Just archiveFileContents -> do
-                              existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM ("Archive unavailable: " <> show (toText archiveFile))
+                              existingArchiveFileContents <- IO.readResource envAws existingArchiveFile & maybeToExceptM (GenericAppError ("Archive unavailable: " <> tshow (toText archiveFile)))
                               let tempArchiveFile = tempPath </> archiveBaseName
                               liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
                               IO.extractTar tempArchiveFile storePath
 
                               meta <- loadMetadata packageStorePath
-                              oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                              oldStorePath <- maybeToExcept (GenericAppError "store-path is missing from Metadata") (Map.lookup "store-path" meta)
 
                               case confPath pInfo of
                                 Tagged conf _ -> do
@@ -201,12 +202,12 @@ runSyncFromArchive opts = do
 
       forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
 
-    Left errorMessage -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
+    Left appError -> do
+      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
   return ()
 
-onErrorClean :: MonadIO m => FilePath -> a -> ExceptT String m a -> m a
+onErrorClean :: MonadIO m => FilePath -> a -> ExceptT AppError m a -> m a
 onErrorClean pkgStorePath failureValue f = do
   result <- runExceptT $ catchError (exceptWarn f) handler
   case result of

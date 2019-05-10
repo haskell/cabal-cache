@@ -108,6 +108,7 @@ library
       App.Commands.Version
       App.Static
       HaskellWorks.CabalCache.AWS.Env
+      HaskellWorks.CabalCache.AppError
       HaskellWorks.CabalCache.Concurrent.DownloadQueue
       HaskellWorks.CabalCache.Concurrent.Fork
       HaskellWorks.CabalCache.Concurrent.Type

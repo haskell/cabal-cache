@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE LambdaCase          #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -19,6 +21,7 @@ import Data.Generics.Product.Any        (the)
 import Data.List                        (isSuffixOf, (\\))
 import Data.Maybe
 import Data.Semigroup                   ((<>))
+import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Core     (PackageInfo (..), Presence (..), Tagged (..), getPackages, loadPlan, relativePaths)
 import HaskellWorks.CabalCache.Location ((<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
@@ -45,6 +48,7 @@ import qualified HaskellWorks.CabalCache.IO.File    as IO
 import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
 import qualified HaskellWorks.CabalCache.IO.Tar     as IO
 import qualified HaskellWorks.CabalCache.Types      as Z
+import qualified Network.HTTP.Types                 as HTTP
 import qualified System.Directory                   as IO
 import qualified System.FilePath.Posix              as FP
 import qualified System.IO                          as IO
@@ -80,7 +84,6 @@ runSyncToArchive opts = do
       let scopedArchivePath = scopedArchiveUri </> compilerId
       IO.createLocalDirectoryIfMissing archivePath
       IO.createLocalDirectoryIfMissing scopedArchivePath
-      CIO.putStrLn "Extracting package list"
 
       packages     <- getPackages storePath planJson
       nonShareable <- packages & filterM (fmap not . isShareable storePath)
@@ -118,23 +121,27 @@ runSyncToArchive opts = do
               CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
-              CIO.putStrLn "[a]"
 
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
-              CIO.putStrLn "[b]"
 
               IO.createTar tempArchiveFile (metas:rp2)
-              CIO.putStrLn "[c]"
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
-              CIO.putStrLn "[d]"
 
               when (canShare planData (packageId pInfo)) $ do
-                CIO.putStrLn "[e]"
-                IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
+                copyResult <- catchError (IO.linkOrCopyResource envAws scopedArchiveFile archiveFile) $ \case
+                  e@(AwsAppError (HTTP.Status 301 _)) -> do
+                    CIO.hPutStrLn IO.stderr $ mempty
+                      <> "ERROR: No write access to archive uris: "
+                      <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                      <> " " <> displayAppError e
 
-    Left errorMessage -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> T.pack errorMessage
+                  _ -> return ()
+
+                return ()
+
+    Left (appError :: AppError) -> do
+      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
   return ()
 
