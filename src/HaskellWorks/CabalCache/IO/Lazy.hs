@@ -49,6 +49,13 @@ import qualified System.IO.Error                    as IO
 {-# ANN module ("HLint: ignore Reduce duplication"  :: String) #-}
 {-# ANN module ("HLint: ignore Redundant bracket"   :: String) #-}
 
+handleAwsError :: MonadCatch m => m a -> m (Either String a)
+handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
+  case e of
+    (AWS.ServiceError (AWS.ServiceError' _ (HTTP.Status 404 _) _ _ _ _)) -> return (Left "Not found")
+    (AWS.ServiceError (AWS.ServiceError' _ (HTTP.Status 301 _) _ _ _ _)) -> return (Left "No access to bucket")
+    _                                                                    -> throwM e
+
 readResource :: MonadResource m => AWS.Env -> Location -> m (Maybe LBS.ByteString)
 readResource envAws = \case
   S3 s3Uri    -> runAws envAws $ AWS.downloadFromS3Uri s3Uri
@@ -85,40 +92,40 @@ firstExistingResource envAws (a:as) = do
     else firstExistingResource envAws as
 
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> m (Either String AWS.HeadObjectResponse)
-headS3Uri envAws (AWS.S3Uri b k) =
-  catch (Right <$> runAws envAws (AWS.send (AWS.headObject b k))) $ \(e :: AWS.Error) ->
-    case e of
-      (AWS.ServiceError (AWS.ServiceError' _ (HTTP.Status 404 _) _ _ _ _)) -> return (Left "Not found")
-      _                                                                    -> throwM e
+headS3Uri envAws (AWS.S3Uri b k) = handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
 
 chunkSize :: AWS.ChunkSize
 chunkSize = AWS.ChunkSize (1024 * 1024)
 
-uploadToS3 :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m ()
+uploadToS3 :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> LBS.ByteString -> m (Either String ())
 uploadToS3 envAws (AWS.S3Uri b k) lbs = do
   let req = AWS.toBody lbs
   let po  = AWS.putObject b k req
-  void $ runResAws envAws $ AWS.send po
+  handleAwsError $ void $ runResAws envAws $ AWS.send po
 
-writeResource :: MonadUnliftIO m => AWS.Env -> Location -> LBS.ByteString -> m ()
+writeResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> LBS.ByteString -> m (Either String ())
 writeResource envAws loc lbs = case loc of
   S3 s3Uri   -> uploadToS3 envAws s3Uri lbs
-  Local path -> liftIO $ LBS.writeFile path lbs
+  Local path -> liftIO (LBS.writeFile path lbs) >> return (Right ())
 
 createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
 createLocalDirectoryIfMissing = \case
   S3 s3Uri   -> return ()
   Local path -> liftIO $ IO.createDirectoryIfMissing True path
 
-copyS3Uri :: MonadUnliftIO m => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT String m ()
+copyS3Uri :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> AWS.S3Uri -> AWS.S3Uri -> ExceptT String m ()
 copyS3Uri envAws (AWS.S3Uri sourceBucket sourceObjectKey) (AWS.S3Uri targetBucket targetObjectKey) = ExceptT $ do
-  response <- runResourceT $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
-  let responseCode = response ^. AWS.corsResponseStatus
-  if 200 <= responseCode && responseCode < 300
-    then return (Right ())
-    else do
-      liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-      return (Left "")
+  responseResult <- runResourceT $
+    handleAwsError $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
+  case responseResult of
+    Right response -> do
+      let responseCode = response ^. AWS.corsResponseStatus
+      if 200 <= responseCode && responseCode < 300
+        then return (Right ())
+        else do
+          liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
+          return (Left "")
+    Left msg -> return (Left msg)
 
 retry :: MonadIO m => Int -> ExceptT String m () -> ExceptT String m ()
 retry n f = catchError f $ \e -> if n > 0
@@ -128,7 +135,7 @@ retry n f = catchError f $ \e -> if n > 0
     retry (n - 1) f
   else throwError e
 
-linkOrCopyResource :: MonadUnliftIO m => AWS.Env -> Location -> Location -> ExceptT String m ()
+linkOrCopyResource :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> Location -> Location -> ExceptT String m ()
 linkOrCopyResource envAws source target = case source of
   S3 sourceS3Uri -> case target of
     S3 targetS3Uri -> retry 3 (copyS3Uri envAws sourceS3Uri targetS3Uri)

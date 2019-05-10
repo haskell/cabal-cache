@@ -118,14 +118,19 @@ runSyncToArchive opts = do
               CIO.putStrLn $ "Creating " <> toText scopedArchiveFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
+              CIO.putStrLn "[a]"
 
               metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+              CIO.putStrLn "[b]"
 
               IO.createTar tempArchiveFile (metas:rp2)
+              CIO.putStrLn "[c]"
 
               liftIO (LBS.readFile tempArchiveFile >>= IO.writeResource envAws scopedArchiveFile)
+              CIO.putStrLn "[d]"
 
-              when (canShare planData (packageId pInfo)) $
+              when (canShare planData (packageId pInfo)) $ do
+                CIO.putStrLn "[e]"
                 IO.linkOrCopyResource envAws scopedArchiveFile archiveFile
 
     Left errorMessage -> do
