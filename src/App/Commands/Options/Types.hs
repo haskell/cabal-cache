@@ -11,7 +11,7 @@ import qualified Antiope.Env as AWS
 
 data SyncToArchiveOptions = SyncToArchiveOptions
   { region        :: Region
-  , archiveUri    :: Location
+  , archiveUri    :: [Location]
   , storePath     :: FilePath
   , storePathHash :: Maybe String
   , threads       :: Int

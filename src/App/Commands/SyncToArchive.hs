@@ -55,17 +55,18 @@ import qualified UnliftIO.Async                     as IO
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
-  let storePath           = opts ^. the @"storePath"
-  let archiveUri          = opts ^. the @"archiveUri"
-  let threads             = opts ^. the @"threads"
-  let awsLogLevel         = opts ^. the @"awsLogLevel"
-  let versionedArchiveUri = archiveUri </> archiveVersion
-  let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
-  let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
+  let storePath            = opts ^. the @"storePath"
+  let archiveUris          = opts ^. the @"archiveUri"
+  let threads              = opts ^. the @"threads"
+  let awsLogLevel          = opts ^. the @"awsLogLevel"
+  let versionedArchiveUris = archiveUris <&> (</> archiveVersion)
+  let storePathHash        = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
+  let scopedArchiveUris    = versionedArchiveUris <&> (</> T.pack storePathHash)
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-  CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+  forM_ archiveUris $ \u -> do
+    CIO.putStrLn $ "Archive URI(s): " <> toText u
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
@@ -77,10 +78,10 @@ runSyncToArchive opts = do
     Right planJson -> do
       let compilerId = planJson ^. the @"compilerId"
       envAws <- IO.unsafeInterleaveIO $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-      let archivePath       = versionedArchiveUri </> compilerId
-      let scopedArchivePath = scopedArchiveUri </> compilerId
-      IO.createLocalDirectoryIfMissing archivePath
-      IO.createLocalDirectoryIfMissing scopedArchivePath
+      let archivePaths       = versionedArchiveUris <&> (</> compilerId)
+      let scopedArchivePaths = scopedArchiveUris <&> (</> compilerId)
+      forM_ archivePaths       IO.createLocalDirectoryIfMissing
+      forM_ scopedArchivePaths IO.createLocalDirectoryIfMissing
 
       packages     <- Z.getPackages storePath planJson
       nonShareable <- packages & filterM (fmap not . isShareable storePath)
@@ -103,41 +104,42 @@ runSyncToArchive opts = do
           earlyExit <- STM.readTVarIO tEarlyExit
           unless earlyExit $ do
             let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
-            let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
-            let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
+            let archiveFiles        = versionedArchiveUris <&> (</> T.pack archiveFileBasename)
+            let scopedArchiveFiles  = versionedArchiveUris <&> (</> T.pack storePathHash </> T.pack archiveFileBasename)
             let packageStorePath    = storePath </> Z.packageDir pInfo
 
             -- either write "normal" package, or a user-specific one if the package cannot be shared
-            let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
+            let targetFiles = if canShare planData (Z.packageId pInfo) then archiveFiles else scopedArchiveFiles
 
-            archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
+            forM_ targetFiles $ \targetFile -> do
+              archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
 
-            unless archiveFileExists $ do
-              packageStorePathExists <- doesDirectoryExist packageStorePath
+              unless archiveFileExists $ do
+                packageStorePathExists <- doesDirectoryExist packageStorePath
 
-              when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
-                let workingStorePackagePath = tempPath </> Z.packageDir pInfo
-                liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+                when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
+                  let workingStorePackagePath = tempPath </> Z.packageDir pInfo
+                  liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-                let rp2 = Z.relativePaths storePath pInfo
+                  let rp2 = Z.relativePaths storePath pInfo
 
-                CIO.putStrLn $ "Creating " <> toText targetFile
+                  CIO.putStrLn $ "Creating " <> toText targetFile
 
-                let tempArchiveFile = tempPath </> archiveFileBasename
+                  let tempArchiveFile = tempPath </> archiveFileBasename
 
-                metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+                  metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-                IO.createTar tempArchiveFile (rp2 <> [metas])
+                  IO.createTar tempArchiveFile (rp2 <> [metas])
 
-                void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
-                  e@(AwsAppError (HTTP.Status 301 _)) -> do
-                    liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
-                    CIO.hPutStrLn IO.stderr $ mempty
-                      <> "ERROR: No write access to archive uris: "
-                      <> tshow (fmap toText [scopedArchiveFile, archiveFile])
-                      <> " " <> displayAppError e
+                  void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+                    e@(AwsAppError (HTTP.Status 301 _)) -> do
+                      liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
+                      CIO.hPutStrLn IO.stderr $ mempty
+                        <> "ERROR: No write access to archive uris: "
+                        <> tshow [toText <$> scopedArchiveFiles, toText <$> archiveFiles]
+                        <> " " <> displayAppError e
 
-                  _ -> return ()
+                    _ -> return ()
 
     Left (appError :: AppError) -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError

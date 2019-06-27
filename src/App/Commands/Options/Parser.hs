@@ -61,12 +61,12 @@ optsSyncToArchive = SyncToArchiveOptions
       <> showDefault <> value Oregon
       <> help "The AWS region in which to operate"
       )
-  <*> option (maybeReader (toLocation . Text.pack))
+  <*> many (option (maybeReader (toLocation . Text.pack))
       (   long "archive-uri"
       <>  help "Archive URI to sync to"
       <>  metavar "S3_URI"
-      <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
-      )
+      -- <>  value (Local $ homeDirectory </> ".cabal" </> "archive")
+      ))
   <*> strOption
       (   long "store-path"
       <>  help "Path to cabal store"
