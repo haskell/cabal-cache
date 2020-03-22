@@ -15,6 +15,9 @@ executors:
   ghc-8_8_2_old:
     docker:
       - image: quay.io/haskell_works/ghc-8.8.2:ubuntu-16.04
+  i386-ghc-8_8_3:
+    docker:
+      - image: quay.io/haskell_works/ghc-8.8.3:i386-ubuntu-18.04
 
 workflows:
   multiple-ghc-build:
@@ -38,6 +41,13 @@ workflows:
           cabal-test-extra: --test-show-details=direct
           workspace-dir: workspace/ghc-8.6.5
           write-result-workspace: true
+
+      - haskell/build-with-cci-cache:
+          name: i386 GHC 8.8.3
+          executor: i386-ghc-8_8_3
+          context: haskell-ci
+          cabal-test-extra: --test-show-details=direct
+          workspace-dir: workspace/i386-ghc-8.8.3
 
       - haskell/build-with-binary-cache:
           name: Darwin
@@ -73,6 +83,7 @@ workflows:
           requires:
             - GHC 8.6.5
             - GHC 8.8.2
+            - i386 GHC 8.8.3
             - Darwin
           checkout: true
           before-release:
@@ -81,6 +92,8 @@ workflows:
                 command: |
                   source ./workspace/ghc-8.6.5/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/ghc-8.6.5/dist/ ./${BUILD_EXE_NAME}
+                  source ./workspace/i386-ghc-8.8.3/project.env
+                  tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/i386-ghc-8.8.3/dist/ ./${BUILD_EXE_NAME}
                   source ./workspace/osx/project.env
                   tar zcvf /tmp/artefacts/${CIRCLE_PROJECT_REPONAME}_${BUILD_ARCH}_${BUILD_OS_NAME}.tar.gz -C ./workspace/osx/dist/ ./${BUILD_EXE_NAME}
           filters:
