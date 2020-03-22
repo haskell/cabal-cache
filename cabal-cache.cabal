@@ -56,6 +56,7 @@ common temporary                      { build-depends: temporary                
 common text                           { build-depends: text                           >= 1.2.3.1    && < 1.3    }
 common time                           { build-depends: time                           >= 1.4        && < 1.10   }
 common topograph                      { build-depends: topograph                      >= 1          && < 2      }
+common unliftio-core                  { build-depends: unliftio-core                  >= 0.1.2.0    && < 0.2    }
 common unliftio                       { build-depends: unliftio                       >= 0.2.10     && < 0.3    }
 common zlib                           { build-depends: zlib                           >= 0.6.2      && < 0.7    }
 
@@ -98,6 +99,7 @@ library
           , time
           , topograph
           , unliftio
+          , unliftio-core
           , zlib
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
