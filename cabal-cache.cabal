@@ -30,7 +30,7 @@ common bytestring                     { build-depends: bytestring               
 common conduit-extra                  { build-depends: conduit-extra                  >= 1.3.1.1    && < 1.4    }
 common containers                     { build-depends: containers                     >= 0.6.0.1    && < 0.7    }
 common cryptonite                     { build-depends: cryptonite                     >= 0.25       && < 1      }
-common deepseq                        { build-depends: deepseq                        >= 1.4.4.0    && < 1.5    }
+common deepseq                        { build-depends: deepseq                        >= 1.4.3.0    && < 1.5    }
 common directory                      { build-depends: directory                      >= 1.3.3.0    && < 1.4    }
 common exceptions                     { build-depends: exceptions                     >= 0.10.1     && < 0.11   }
 common filepath                       { build-depends: filepath                       >= 1.3        && < 1.5    }
@@ -48,7 +48,7 @@ common process                        { build-depends: process                  
 common raw-strings-qq                 { build-depends: raw-strings-qq                 >= 1.1        && < 2      }
 common relation                       { build-depends: relation                       >= 0.5        && < 0.6    }
 common resourcet                      { build-depends: resourcet                      >= 1.2.2      && < 1.3    }
-common selective                      { build-depends: selective                      >= 0.1.0      && < 0.2    }
+common selective                      { build-depends: selective                      >= 0.1.0      && < 0.5    }
 common stm                            { build-depends: stm                            >= 2.5.0.0    && < 3      }
 common stringsearch                   { build-depends: stringsearch                   >= 0.3.6.6    && < 0.4    }
 common tar                            { build-depends: tar                            >= 0.5.1.0    && < 0.6    }
