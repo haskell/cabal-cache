@@ -1,4 +1,4 @@
-name: Binaries
+name: Build & Publish
 
 defaults:
   run:
@@ -87,8 +87,13 @@ jobs:
               --region        "$BINARY_CACHE_REGION" \
               --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
 
+  release:
+    runs-on: ubuntu-18.04
+    needs: build
+
+    steps:
       - name: Check hackage
-        uses: haskell-works/cabal-cache-action@v1
+        uses: haskell-works/hackage-action@master
         with:
           args: |
             is-published
