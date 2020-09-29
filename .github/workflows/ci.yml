@@ -87,6 +87,12 @@ jobs:
               --region        "$BINARY_CACHE_REGION" \
               --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
 
+      - name: Check hackage
+        uses: haskell-works/cabal-cache-action@v1
+        with:
+          args: |
+            is-published
+
       - name: Compress Binary
         id: compress_binary
         env:
