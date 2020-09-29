@@ -51,12 +51,11 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           BINARY_CACHE_REGION: ${{ secrets.BINARY_CACHE_REGION }}
-          BINARY_CACHE_THREADS: ${{ secrets.BINARY_CACHE_THREADS }}
           BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}
         with:
           args: |
             sync-from-archive \
-              --threads       "$BINARY_CACHE_THREADS" \
+              --threads       16 \
               --archive-uri   "$BINARY_CACHE_URI" \
               --region        "$BINARY_CACHE_REGION" \
               --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
@@ -79,12 +78,11 @@ jobs:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           BINARY_CACHE_REGION: ${{ secrets.BINARY_CACHE_REGION }}
-          BINARY_CACHE_THREADS: ${{ secrets.BINARY_CACHE_THREADS }}
           BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}
         with:
           args: |
             sync-to-archive \
-              --threads       "$BINARY_CACHE_THREADS" \
+              --threads       16 \
               --archive-uri   "$BINARY_CACHE_URI" \
               --region        "$BINARY_CACHE_REGION" \
               --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"

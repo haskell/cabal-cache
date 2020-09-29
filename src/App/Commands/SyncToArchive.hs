@@ -53,8 +53,9 @@ import qualified System.IO.Temp                     as IO
 import qualified System.IO.Unsafe                   as IO
 import qualified UnliftIO.Async                     as IO
 
-{- HLINT ignore "Redundant do"        -}
-{- HLINT ignore "Reduce duplication"  -}
+{- HLINT ignore "Monoid law, left identity" -}
+{- HLINT ignore "Redundant do"              -}
+{- HLINT ignore "Reduce duplication"        -}
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
 runSyncToArchive opts = do
@@ -120,32 +121,36 @@ runSyncToArchive opts = do
 
                 archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
 
+                CIO.putStrLn $ "Package store does not exist " <> tshow targetFile
+
                 unless archiveFileExists $ do
                   packageStorePathExists <- doesDirectoryExist packageStorePath
 
-                  when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
-                    let workingStorePackagePath = tempPath </> Z.packageDir pInfo
-                    liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+                  if packageStorePathExists
+                    then void $ runExceptT $ IO.exceptWarn $ do
+                      let workingStorePackagePath = tempPath </> Z.packageDir pInfo
+                      liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-                    let rp2 = Z.relativePaths storePath pInfo
+                      let rp2 = Z.relativePaths storePath pInfo
 
-                    CIO.putStrLn $ "Creating " <> toText targetFile
+                      CIO.putStrLn $ "Creating " <> toText targetFile
 
-                    let tempArchiveFile = tempPath </> archiveFileBasename
+                      let tempArchiveFile = tempPath </> archiveFileBasename
 
-                    metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+                      metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
 
-                    IO.createTar tempArchiveFile (rp2 <> [metas])
+                      IO.createTar tempArchiveFile (rp2 <> [metas])
 
-                    void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
-                      e@(AwsAppError (HTTP.Status 301 _)) -> do
-                        liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
-                        CIO.hPutStrLn IO.stderr $ mempty
-                          <> "ERROR: No write access to archive uris: "
-                          <> tshow (fmap toText [scopedArchiveFile, archiveFile])
-                          <> " " <> displayAppError e
+                      void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+                        e@(AwsAppError (HTTP.Status 301 _)) -> do
+                          liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
+                          CIO.hPutStrLn IO.stderr $ mempty
+                            <> "ERROR: No write access to archive uris: "
+                            <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                            <> " " <> displayAppError e
 
-                      _ -> return ()
+                        _ -> return ()
+                    else CIO.putStrLn . T.pack $ "Package store does not exist " <> packageStorePath
         Left msg -> CIO.hPutStrLn IO.stderr msg
 
     Left (appError :: AppError) -> do
