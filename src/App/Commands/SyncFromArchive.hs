@@ -55,11 +55,12 @@ import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
 
-{- HLINT ignore "Redundant do"        -}
-{- HLINT ignore "Reduce duplication"  -}
+{- HLINT ignore "Monoid law, left identity" -}
+{- HLINT ignore "Reduce duplication"        -}
+{- HLINT ignore "Redundant do"              -}
 
 skippable :: Z.Package -> Bool
-skippable package = (package ^. the @"packageType" == "pre-existing")
+skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
 runSyncFromArchive opts = do
@@ -143,7 +144,9 @@ runSyncFromArchive opts = do
                       CIO.putStrLn $ "Skipping: " <> packageId
                       return True
                     else if storeDirectoryExists
-                      then return True
+                      then do
+                        CIO.putStrLn $ "Already have " <> packageId
+                        return True
                       else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) False $ do
                         (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
@@ -242,6 +245,10 @@ optsSyncFromArchive = SyncFromArchiveOptions
         <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
         <>  metavar "AWS_LOG_LEVEL"
         )
+      )
+  <*> switch
+      (   long "verbose"
+      <>  help "Verbose logging"
       )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())

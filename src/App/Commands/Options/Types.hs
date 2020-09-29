@@ -17,6 +17,7 @@ data SyncToArchiveOptions = SyncToArchiveOptions
   , storePathHash :: Maybe String
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
+  , verbose       :: Bool
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
@@ -27,6 +28,7 @@ data SyncFromArchiveOptions = SyncFromArchiveOptions
   , storePathHash :: Maybe String
   , threads       :: Int
   , awsLogLevel   :: Maybe AWS.LogLevel
+  , verbose       :: Bool
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)

@@ -206,6 +206,10 @@ optsSyncToArchive = SyncToArchiveOptions
         <>  metavar "AWS_LOG_LEVEL"
         )
       )
+  <*> switch
+      (   long "verbose"
+      <>  help "Verbose logging"
+      )
 
 cmdSyncToArchive :: Mod CommandFields (IO ())
 cmdSyncToArchive = command "sync-to-archive"  $ flip info idm $ runSyncToArchive <$> optsSyncToArchive
