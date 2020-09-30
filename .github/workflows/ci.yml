@@ -39,7 +39,7 @@ jobs:
             cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-
 
       - name: Peek
-        run: ls -al "${{ steps.setup-haskell.outputs.cabal-store }}/*"
+        run: find "${{ steps.setup-haskell.outputs.cabal-store }}"
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
@@ -64,7 +64,7 @@ jobs:
               --store-path    "${{ steps.setup-haskell.outputs.cabal-store }}"
 
       - name: Peek
-        run: ls -al "${{ steps.setup-haskell.outputs.cabal-store }}/*"
+        run: find "${{ steps.setup-haskell.outputs.cabal-store }}"
 
       - name: Build
         # Try building it twice in case of flakey builds on Windows
