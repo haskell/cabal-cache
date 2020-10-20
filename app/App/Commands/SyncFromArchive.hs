@@ -50,6 +50,7 @@ import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
 import qualified HaskellWorks.CabalCache.Types                    as Z
 import qualified System.Directory                                 as IO
+import qualified System.Exit                                      as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
@@ -70,6 +71,9 @@ runSyncFromArchive opts = do
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
+
+  maybeHandleRestoreList <- forM (opts ^. the @"outputRestoreList") $ \restoreListFile -> do
+    IO.openFile restoreListFile IO.WriteMode
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
@@ -149,6 +153,10 @@ runSyncFromArchive opts = do
                         (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
                         CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
 
+                        forM_ maybeHandleRestoreList $ \handleRestoreList -> do
+                          liftIO $ IO.hPutStrLn handleRestoreList (T.unpack (toText existingArchiveFile))
+                          liftIO $ IO.hFlush handleRestoreList
+
                         let tempArchiveFile = tempPath </> archiveBaseName
                         liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
                         IO.extractTar tempArchiveFile storePath
@@ -180,8 +188,9 @@ runSyncFromArchive opts = do
         Left msg -> CIO.hPutStrLn IO.stderr msg
     Left appError -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
+      IO.exitFailure
 
-  return ()
+  forM_ maybeHandleRestoreList IO.hClose
 
 cleanupStorePath :: (MonadIO m, MonadCatch m) => FilePath -> Z.PackageId -> AppError -> m ()
 cleanupStorePath packageStorePath packageId e = do
@@ -242,6 +251,13 @@ optsSyncFromArchive = SyncFromArchiveOptions
         (   long "aws-log-level"
         <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
         <>  metavar "AWS_LOG_LEVEL"
+        )
+      )
+  <*> optional
+      ( strOption
+        (   long "output-restore-list"
+        <>  help "File to which a list of restored cabal store products will be written"
+        <>  metavar "FILE"
         )
       )
 

@@ -27,13 +27,14 @@ data PlanOptions = PlanOptions
   } deriving (Eq, Show, Generic)
 
 data SyncFromArchiveOptions = SyncFromArchiveOptions
-  { region        :: Region
-  , archiveUris   :: [Location]
-  , buildPath     :: FilePath
-  , storePath     :: FilePath
-  , storePathHash :: Maybe String
-  , threads       :: Int
-  , awsLogLevel   :: Maybe AWS.LogLevel
+  { region            :: Region
+  , archiveUris       :: [Location]
+  , buildPath         :: FilePath
+  , storePath         :: FilePath
+  , storePathHash     :: Maybe String
+  , threads           :: Int
+  , awsLogLevel       :: Maybe AWS.LogLevel
+  , outputRestoreList :: Maybe FilePath
   } deriving (Eq, Show, Generic)
 
 data VersionOptions = VersionOptions deriving (Eq, Show, Generic)
