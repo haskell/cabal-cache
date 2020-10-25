@@ -21,8 +21,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: true
+
       - uses: actions/setup-haskell@v1
         id: setup-haskell
         with:
@@ -100,20 +99,20 @@ jobs:
             windows-*)  os="windows"  ;;
             *)          exit 1        ;; # error
           esac
-          os_arch="$(uname -m)-$os"
+          arch_os="$(uname -m)-$os"
 
           cp "$HS_BIN" "$NAME${{env.EXE_EXT}}"
           [ "$OS" != Windows_NT ] && strip "$NAME${{env.EXE_EXT}}"
 
           mkdir -p artifacts
 
-          7z a "artifacts/$NAME-$os_arch.zip" "$NAME${{env.EXE_EXT}}"
+          7z a "artifacts/$NAME-$arch_os.zip" "$NAME${{env.EXE_EXT}}"
           echo "::set-output name=path_zip::$NAME.zip"
 
-          gzip -c --best "$NAME${{env.EXE_EXT}}" > artifacts/$NAME-$os_arch${{env.EXE_EXT}}.gz
+          gzip -c --best "$NAME${{env.EXE_EXT}}" > artifacts/$NAME-$arch_os${{env.EXE_EXT}}.gz
           echo "::set-output name=path_gzip::$NAME.gz"
 
-          tar zcvf "artifacts/$NAME-$os_arch.tar.gz" "$NAME${{env.EXE_EXT}}"
+          tar zcvf "artifacts/$NAME-$arch_os.tar.gz" "$NAME${{env.EXE_EXT}}"
           echo "::set-output name=path_targz::$NAME.targz"
 
       - uses: actions/upload-artifact@v2
@@ -121,13 +120,99 @@ jobs:
           name: cabal-cache-${{ runner.OS }}-${{ matrix.ghc }}
           path: artifacts
 
-  release:
+  check:
     needs: build
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.tag.outputs.tag }}
+
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Check if cabal project is sane
+        run: |
+          PROJECT_DIR=$PWD
+          mkdir -p $PROJECT_DIR/build/sdist
+          for i in $(git ls-files | grep '\.cabal'); do
+            cd $PROJECT_DIR && cd `dirname $i`
+            cabal check
+          done
+
+          echo ${{ github.ref }}
+
+      - name: Tag new version
+        id: tag
+        if: ${{ github.ref == 'ref/head/master' }}
+        env:
+          server: http://hackage.haskell.org
+          username: ${{ secrets.HACKAGE_USER }}
+          password: ${{ secrets.HACKAGE_PASS }}
+        run: |
+          package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
+
+          echo "Package version is v$package_version"
+
+          git fetch --unshallow origin
+
+          if ! git rev-parse "v$package_version"; then
+            echo "Tagging with new version "v$package_version""
+
+            git tag "v$package_version"
+            git push origin "v$package_version"
+            echo "::set-output name=tag::v$package_version"
+          fi
+
+  release:
+    needs: [build, check]
+    runs-on: ubuntu-latest
+    if: ${{ needs.check.outputs.tag != '' }}
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
 
     steps:
+      - uses: actions/checkout@v2
+
+      - name: Create source distribution
+        run: |
+          PROJECT_DIR=$PWD
+          mkdir -p $PROJECT_DIR/build/sdist
+          for i in $(git ls-files | grep '\.cabal'); do
+            cd $PROJECT_DIR && cd `dirname $i`
+            cabal v2-sdist -o $PROJECT_DIR/build/sdist
+          done;
+
+      - name: Publish to hackage
+        env:
+          server: http://hackage.haskell.org
+          username: ${{ secrets.HACKAGE_USER }}
+          password: ${{ secrets.HACKAGE_PASS }}
+          candidate: true
+        run: |
+          package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
+
+          for PACKAGE_TARBALL in $(find ./build/sdist/ -name "*.tar.gz"); do
+            PACKAGE_NAME=$(basename ${PACKAGE_TARBALL%.*.*})
+
+            if ${{ env.candidate }}; then
+              TARGET_URL="${{ env.server }}/packages/candidates";
+              DOCS_URL="${{ env.server }}/package/$PACKAGE_NAME/candidate/docs"
+            else
+              TARGET_URL="${{ env.server }}/packages/upload";
+              DOCS_URL="${{ env.server }}/package/$PACKAGE_NAME/docs"
+            fi
+
+            HACKAGE_STATUS=$(curl --silent --head -w %{http_code} -XGET --anyauth --user "${{ env.username }}:${{ env.password }}" ${{ env.server }}/package/$PACKAGE_NAME -o /dev/null)
+
+            if [ "$HACKAGE_STATUS" = "404" ]; then
+              echo "Uploading $PACKAGE_NAME to $TARGET_URL"
+
+              curl -X POST -f --user "${{ env.username }}:${{ env.password }}" $TARGET_URL -F "package=@$PACKAGE_TARBALL"
+              echo "Uploaded $PACKAGE_NAME"
+            else
+              echo "Package $PACKAGE_NAME" already exists on Hackage.
+            fi
+          done
+
       - name: Create Release
         id: create_release
         uses: actions/create-release@v1
@@ -136,15 +221,13 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
-          body: |
-            Changes in this Release
-            - First Change
-            - Second Change
+          body: Undocumented
           draft: true
           prerelease: false
 
   publish:
     needs: [build, release]
+
     runs-on: ${{ matrix.os }}
 
     strategy:
@@ -173,7 +256,7 @@ jobs:
             *)          exit 1        ;; # error
           esac
           arch_os="$(uname -m)-$os"
-          echo "::set-output name=os_arch::$os_arch"
+          echo "::set-output name=arch_os::$arch_os"
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
@@ -185,8 +268,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}${{env.EXE_EXT}}.gz
-          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.gz
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.arch_os }}${{env.EXE_EXT}}.gz
+          asset_name: cabal-cache-${{ steps.axes.outputs.arch_os }}.gz
           asset_content_type: application/gzip
 
       - name: Upload Release Binary
@@ -195,8 +278,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}.tar.gz
-          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.tar.gz
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.arch_os }}.tar.gz
+          asset_name: cabal-cache-${{ steps.axes.outputs.arch_os }}.tar.gz
           asset_content_type: application/gzip
 
       - name: Upload Release Binary
@@ -205,6 +288,6 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           upload_url: ${{ needs.release.outputs.upload_url }}
-          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.os_arch }}.zip
-          asset_name: cabal-cache-${{ steps.axes.outputs.os_arch }}.zip
+          asset_path: artifacts/cabal-cache-${{ steps.axes.outputs.arch_os }}.zip
+          asset_name: cabal-cache-${{ steps.axes.outputs.arch_os }}.zip
           asset_content_type: application/zip
