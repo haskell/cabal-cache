@@ -28,6 +28,18 @@ jobs:
         with:
           ghc-version: ${{ matrix.ghc }}
 
+      - name: Test
+        run: |
+          mkdir -p moo
+          echo 'Hello world' > moo/hello
+
+      - uses: action-works/cabal-cache@main
+        name: Cache cabal store
+        with:
+          path: moo/hello
+          key: cache-v1-${{ runner.os }}-${{ matrix.ghc }}
+          restore-keys: cache-v1-${{ runner.os }}-${{ matrix.ghc }}
+
       - uses: actions/cache@v2
         name: Cache cabal store
         with:

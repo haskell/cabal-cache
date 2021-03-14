@@ -157,3 +157,4 @@ To protect against this, `cabal-cache` will by default not sync packages down fr
 if the package's cabal store `share` directory contain unusual files or directories _unless_ the
 `${store_hash}` matches.  Currently it only considers the `doc` subdirectory to be usual.  More
 exceptions may be added later.
+
