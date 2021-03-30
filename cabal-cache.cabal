@@ -126,6 +126,7 @@ library
                         HaskellWorks.CabalCache.Location
                         HaskellWorks.CabalCache.Metadata
                         HaskellWorks.CabalCache.Options
+                        HaskellWorks.CabalCache.Plugin
                         HaskellWorks.CabalCache.Show
                         HaskellWorks.CabalCache.Text
                         HaskellWorks.CabalCache.Topology

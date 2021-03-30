@@ -10,6 +10,7 @@
 - ignore: {name: "Unused LANGUAGE pragma"}
 - ignore: {name: "Move brackets to avoid $"}
 - ignore: {name: "Monoid law, left identity"}
+- ignore: {name: "Use let"}
 
 
 # Specify additional command line arguments
