@@ -60,7 +60,7 @@ common time                           { build-depends: time                     
 common topograph                      { build-depends: topograph                      >= 1          && < 2      }
 common transformers                   { build-depends: transformers                   >= 0.5.6.2    && < 0.7    }
 common unliftio                       { build-depends: unliftio                       >= 0.2.10     && < 0.3    }
-common zlib                           { build-depends: zlib                           >= 0.6.2      && < 0.7    }
+common yaml                           { build-depends: yaml                           >= 0.11.5.0   && < 0.12   }
 
 common config
   default-language:     Haskell2010
@@ -102,6 +102,7 @@ library
                       , text
                       , topograph
                       , transformers
+                      , yaml
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
@@ -110,6 +111,8 @@ library
                         HaskellWorks.CabalCache.Concurrent.DownloadQueue
                         HaskellWorks.CabalCache.Concurrent.Fork
                         HaskellWorks.CabalCache.Concurrent.Type
+                        HaskellWorks.CabalCache.Config
+                        HaskellWorks.CabalCache.Config.Types
                         HaskellWorks.CabalCache.Core
                         HaskellWorks.CabalCache.Data.List
                         HaskellWorks.CabalCache.Error
@@ -151,6 +154,7 @@ executable cabal-cache
                       , temporary
                       , text
                       , unliftio
+                      , yaml
   build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
