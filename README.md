@@ -166,3 +166,4 @@ if the package's cabal store `share` directory contain unusual files or director
 `${store_hash}` matches.  Currently it only considers the `doc` subdirectory to be usual.  More
 exceptions may be added later.
 
+stuff
