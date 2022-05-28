@@ -31,15 +31,19 @@ import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Error
 import HaskellWorks.CabalCache.Show
+import Polysemy                         (Member, Sem)
 import System.FilePath                  ((<.>), (</>))
 
-import qualified Data.ByteString.Lazy           as LBS
-import qualified Data.List                      as L
-import qualified Data.Text                      as T
-import qualified HaskellWorks.CabalCache.IO.Tar as IO
-import qualified HaskellWorks.CabalCache.Types  as Z
-import qualified System.Directory               as IO
-import qualified System.Process                 as IO
+import qualified Data.ByteString.Lazy                   as LBS
+import qualified Data.List                              as L
+import qualified Data.Text                              as T
+import qualified HaskellWorks.CabalCache.IO.Tar         as IO
+import qualified HaskellWorks.CabalCache.Types          as Z
+import qualified Polysemy.ConstraintAbsorber.MonadCatch as PY
+import qualified Polysemy.Embed                         as PY
+import qualified Polysemy.Error                         as PY
+import qualified System.Directory                       as IO
+import qualified System.Process                         as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
 
@@ -62,31 +66,57 @@ data PackageInfo = PackageInfo
   , libs       :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
-(<||>) :: Monad m => ExceptT e m a -> ExceptT e m a -> ExceptT e m a
-(<||>) f g = f `catchError` const g
+(<||>) :: ()
+  => Member (PY.Error e) r
+  => Sem r a
+  -> Sem r a
+  -> Sem r a
+(<||>) f g = f `PY.catch` const g
 
-findExecutable :: MonadIO m => Text -> ExceptT Text m Text
+findExecutable :: ()
+  => Member (PY.Error Text) r
+  => Member (PY.Embed IO  ) r
+  => Text
+  -> Sem r Text
 findExecutable exe = fmap T.pack $
   liftIO (IO.findExecutable (T.unpack exe)) >>= nothingToError (exe <> " is not in path")
 
-runGhcPkg :: (MonadIO m, MonadCatch m) => Text -> [Text] -> ExceptT Text m Text
-runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
-  \(e :: IOError) -> throwError $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
+runGhcPkg :: ()
+  => Member (PY.Embed IO           ) r
+  => Member (PY.Error SomeException) r
+  => Member (PY.Error Text         ) r
+  => Text
+  -> [Text]
+  -> Sem r Text
+runGhcPkg cmdExe args = PY.absorbMonadCatch $
+  catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
+    \(e :: IOError) -> PY.throw $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
 
-verifyGhcPkgVersion :: (MonadIO m, MonadCatch m) => Text -> Text -> ExceptT Text m Text
+verifyGhcPkgVersion :: ()
+  => Member (PY.Embed IO           ) r
+  => Member (PY.Error Text         ) r
+  => Member (PY.Error SomeException) r
+  => Text
+  -> Text
+  -> Sem r Text
 verifyGhcPkgVersion version cmdExe = do
   stdout <- runGhcPkg cmdExe ["--version"]
   if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
     then return cmdExe
-    else throwError $ cmdExe <> "has is not of version " <> version
+    else PY.throw $ cmdExe <> "has is not of version " <> version
 
-mkCompilerContext :: (MonadIO m, MonadCatch m) => Z.PlanJson -> ExceptT Text m Z.CompilerContext
+mkCompilerContext :: ()
+  => Member (PY.Embed IO           ) r
+  => Member (PY.Error SomeException) r
+  => Member (PY.Error Text         ) r
+  => Z.PlanJson
+  -> Sem r Z.CompilerContext
 mkCompilerContext plan = do
   compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId") & nothingToError "No compiler version available in plan"
   let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
-  ghcPkgCmdPath <-
-          (findExecutable versionedGhcPkgCmd  >>= verifyGhcPkgVersion compilerVersion)
-    <||>  (findExecutable "ghc-pkg"           >>= verifyGhcPkgVersion compilerVersion)
+  ghcPkgCmdPath <- (<||>) @Text
+    (findExecutable versionedGhcPkgCmd  >>= verifyGhcPkgVersion compilerVersion)
+    (findExecutable "ghc-pkg"           >>= verifyGhcPkgVersion compilerVersion)
   return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]

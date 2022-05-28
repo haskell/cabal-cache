@@ -17,7 +17,7 @@ source-repository head
   type: git
   location: https://github.com/haskell-works/cabal-cache
 
-common base                           { build-depends: base                           >= 4.7        && < 5      }
+common base                           { build-depends: base                           >= 4.14.3.0   && < 5      }
 
 common aeson                          { build-depends: aeson                          >= 1.4.2.0    && < 2.1    }
 common amazonka                       { build-depends: amazonka                       >= 1.6.1      && < 1.7    }
@@ -46,10 +46,13 @@ common lens                           { build-depends: lens                     
 common mtl                            { build-depends: mtl                            >= 2.2.2      && < 2.3    }
 common network-uri                    { build-depends: network-uri                    >= 2.6.4.1    && < 2.8    }
 common optparse-applicative           { build-depends: optparse-applicative           >= 0.14       && < 0.18   }
+common polysemy                       { build-depends: polysemy                       >= 1.7.1.0    && < 1.8    }
+common polysemy-managed               { build-depends: polysemy-managed               >= 0.1.0.0    && < 0.2    }
+common polysemy-plugin                { build-depends: polysemy-plugin                >= 0.4                    }
+common polysemy-zoo                   { build-depends: polysemy-zoo                   >= 0.7.0.0    && < 0.8    }
 common process                        { build-depends: process                        >= 1.6.5.0    && < 1.7    }
 common raw-strings-qq                 { build-depends: raw-strings-qq                 >= 1.1        && < 2      }
 common relation                       { build-depends: relation                       >= 0.5        && < 0.6    }
-common resourcet                      { build-depends: resourcet                      >= 1.2.2      && < 1.3    }
 common selective                      { build-depends: selective                      >= 0.1.0      && < 0.6    }
 common stm                            { build-depends: stm                            >= 2.5.0.0    && < 3      }
 common stringsearch                   { build-depends: stringsearch                   >= 0.3.6.6    && < 0.4    }
@@ -59,11 +62,12 @@ common text                           { build-depends: text                     
 common time                           { build-depends: time                           >= 1.4        && < 1.13   }
 common topograph                      { build-depends: topograph                      >= 1          && < 2      }
 common transformers                   { build-depends: transformers                   >= 0.5.6.2    && < 0.7    }
-common unliftio                       { build-depends: unliftio                       >= 0.2.10     && < 0.3    }
+common unliftio                       { build-depends: unliftio                       >= 0.1        && < 0.3    }
 common zlib                           { build-depends: zlib                           >= 0.6.2      && < 0.7    }
 
 common config
   default-language:     Haskell2010
+  default-extensions:   ImportQualifiedPost
   ghc-options:          -Wall
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
@@ -71,6 +75,9 @@ common config
 
   if impl(ghc >= 8.10.1)
     ghc-options:        -Wunused-packages
+
+common polysemy-flags
+  ghc-options:          -fplugin=Polysemy.Plugin -flate-specialise -fspecialise-aggressively
 
 library
   import:               base, config
@@ -95,13 +102,18 @@ library
                       , mtl
                       , network-uri
                       , optparse-applicative
+                      , polysemy
+                      , polysemy-managed
+                      , polysemy-plugin
+                      , polysemy-zoo
                       , process
                       , relation
-                      , resourcet
                       , stm
                       , text
+                      , temporary
                       , topograph
                       , transformers
+  import:               polysemy-flags
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
@@ -123,6 +135,10 @@ library
                         HaskellWorks.CabalCache.Location
                         HaskellWorks.CabalCache.Metadata
                         HaskellWorks.CabalCache.Options
+                        HaskellWorks.CabalCache.Polysemy
+                        HaskellWorks.CabalCache.Polysemy.Error
+                        HaskellWorks.CabalCache.Polysemy.IoError
+                        HaskellWorks.CabalCache.Polysemy.Temp
                         HaskellWorks.CabalCache.Show
                         HaskellWorks.CabalCache.Text
                         HaskellWorks.CabalCache.Topology
@@ -144,12 +160,15 @@ executable cabal-cache
                       , lens
                       , mtl
                       , optparse-applicative
-                      , resourcet
+                      , polysemy
+                      , polysemy-managed
+                      , polysemy-plugin
+                      , polysemy-zoo
                       , stm
                       , stringsearch
-                      , temporary
                       , text
                       , unliftio
+  import:               polysemy-flags,
   build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
@@ -180,8 +199,12 @@ test-suite cabal-cache-test
                       , hw-hspec-hedgehog
                       , lens
                       , network-uri
+                      , polysemy
+                      , polysemy-managed
+                      , polysemy-plugin
                       , raw-strings-qq
                       , text
+  import:               polysemy-flags,
 
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs

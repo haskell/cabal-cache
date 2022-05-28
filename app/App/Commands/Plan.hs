@@ -30,6 +30,8 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Polysemy                           as PY
+import qualified Polysemy.Resource                  as PY
 import qualified System.IO                          as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
@@ -37,7 +39,7 @@ import qualified System.IO                          as IO
 {- HLINT ignore "Reduce duplication"        -}
 
 runPlan :: Z.PlanOptions -> IO ()
-runPlan opts = do
+runPlan opts = PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ do
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = [Local ""]
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
@@ -49,13 +51,13 @@ runPlan opts = do
   CIO.putStrLn $ "Archive URIs: "     <> tshow archiveUris
   CIO.putStrLn $ "Archive version: "  <> archiveVersion
 
-  tEarlyExit <- STM.newTVarIO False
+  tEarlyExit <- liftIO $ STM.newTVarIO False
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+  mbPlan <- liftIO $ Z.loadPlan $ opts ^. the @"buildPath"
 
   case mbPlan of
     Right planJson -> do
-      packages <- Z.getPackages storePath planJson
+      packages <- liftIO $ Z.getPackages storePath planJson
 
       plan <- forM packages $ \pInfo -> do
         let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
@@ -65,13 +67,13 @@ runPlan opts = do
         return $ archiveFiles <> scopedArchiveFiles
 
       if outputFile == "-"
-        then LBS.putStr $ J.encode (fmap (fmap toText) plan)
-        else LBS.writeFile outputFile $ J.encode (fmap (fmap toText) plan)
+        then liftIO $ LBS.putStr $ J.encode (fmap (fmap toText) plan)
+        else liftIO $ LBS.writeFile outputFile $ J.encode (fmap (fmap toText) plan)
 
     Left (appError :: AppError) -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
-  earlyExit <- STM.readTVarIO tEarlyExit
+  earlyExit <- liftIO $ STM.readTVarIO tEarlyExit
 
   when earlyExit $ CIO.hPutStrLn IO.stderr "Early exit due to error"
 

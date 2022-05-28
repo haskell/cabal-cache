@@ -1,9 +1,17 @@
+{-# LANGUAGE FlexibleContexts #-}
+
 module HaskellWorks.CabalCache.Error
   ( nothingToError
   ) where
 
-import Control.Monad.Except
+import Polysemy (Member, Sem)
 
-nothingToError :: MonadError e m => e -> Maybe a -> m a
+import qualified Polysemy.Error as PY
+
+nothingToError :: ()
+  => Member (PY.Error e) r
+  => e
+  -> Maybe a
+  -> Sem r a
 nothingToError _ (Just a) = return a
-nothingToError e Nothing  = throwError e
+nothingToError e Nothing  = PY.throw e

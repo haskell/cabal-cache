@@ -1,4 +1,6 @@
+{-# LANGUAGE BlockArguments    #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TypeApplications  #-}
 
 {-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
 
@@ -8,6 +10,7 @@ module HaskellWorks.CabalCache.AwsSpec
 
 import Antiope.Core
 import Antiope.Env
+import Control.Exception (SomeException)
 import Control.Lens
 import Control.Monad
 import Control.Monad.IO.Class
@@ -21,6 +24,10 @@ import Test.Hspec
 import qualified Data.ByteString.Lazy.Char8 as LBSC
 import qualified Network.HTTP.Types         as HTTP
 import qualified Network.URI                as URI
+import qualified Polysemy                   as PY
+import qualified Polysemy.Error             as PY
+import qualified Polysemy.Managed          as PY
+import qualified Polysemy.Resource          as PY
 import qualified System.Environment         as IO
 
 {- HLINT ignore "Redundant do"        -}
@@ -34,7 +41,14 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
     unless ci $ do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
-      result <- liftIO $ runResourceT $ headS3Uri envAws uri
-      result === Left AwsAppError
+      result <- liftIO $ PY.runFinal
+        . PY.resourceToIOFinal
+        . PY.embedToFinal
+        . PY.runManaged
+        . PY.runError @String
+        . PY.mapError (show @SomeException)
+        . PY.runError @AppError
+        $ headS3Uri envAws uri
+      result === Right (Left AwsAppError
         { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
-        }
+        })

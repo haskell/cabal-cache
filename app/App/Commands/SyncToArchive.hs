@@ -11,141 +11,156 @@ module App.Commands.SyncToArchive
 
 import Antiope.Core                     (Region (..), toText)
 import Antiope.Env                      (mkEnv)
-import Antiope.Options.Applicative
+import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
-import Control.Monad.Trans.Resource     (runResourceT)
+import Control.Lens                     ((^..), (.~), (<&>), (&), (^.), Each(each))
+import Control.Monad.Except             (void, when, unless, MonadIO(..), filterM)
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
-import Data.Maybe
-import Data.Monoid
-import HaskellWorks.CabalCache.AppError
+import Data.Maybe                       (fromMaybe)
+import Data.Monoid                      (Dual(Dual), Endo(Endo))
+import Data.Text                        (Text)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError(AwsAppError))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              hiding (columns)
 import System.Directory                 (doesDirectoryExist)
 
-import qualified App.Commands.Options.Types         as Z
-import qualified App.Static                         as AS
-import qualified Control.Concurrent.STM             as STM
-import qualified Data.ByteString.Lazy               as LBS
-import qualified Data.ByteString.Lazy.Char8         as LC8
-import qualified Data.Text                          as T
-import qualified Data.Text                          as Text
-import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
-import qualified HaskellWorks.CabalCache.Core       as Z
-import qualified HaskellWorks.CabalCache.GhcPkg     as GhcPkg
-import qualified HaskellWorks.CabalCache.Hash       as H
-import qualified HaskellWorks.CabalCache.IO.Console as CIO
-import qualified HaskellWorks.CabalCache.IO.Error   as IO
-import qualified HaskellWorks.CabalCache.IO.File    as IO
-import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
-import qualified HaskellWorks.CabalCache.IO.Tar     as IO
-import qualified Network.HTTP.Types                 as HTTP
-import qualified System.Directory                   as IO
-import qualified System.IO                          as IO
-import qualified System.IO.Temp                     as IO
-import qualified System.IO.Unsafe                   as IO
-import qualified UnliftIO.Async                     as IO
+import qualified App.Commands.Options.Types               as Z
+import qualified App.Static                               as AS
+import qualified Control.Concurrent.STM                   as STM
+import qualified Data.ByteString.Lazy                     as LBS
+import qualified Data.ByteString.Lazy.Char8               as LC8
+import qualified Data.Text                                as T
+import qualified Data.Text                                as Text
+import qualified HaskellWorks.CabalCache.AWS.Env          as AWS
+import qualified HaskellWorks.CabalCache.Core             as Z
+import qualified HaskellWorks.CabalCache.GhcPkg           as GhcPkg
+import qualified HaskellWorks.CabalCache.Hash             as H
+import qualified HaskellWorks.CabalCache.IO.Console       as CIO
+import qualified HaskellWorks.CabalCache.IO.File          as IO
+import qualified HaskellWorks.CabalCache.IO.Lazy          as IO
+import qualified HaskellWorks.CabalCache.IO.Tar           as IO
+import qualified HaskellWorks.CabalCache.Polysemy.Error   as PY
+import qualified HaskellWorks.CabalCache.Polysemy.Temp    as PY
+import qualified Network.HTTP.Types                       as HTTP
+import qualified Polysemy                                 as PY
+import qualified Polysemy.ConstraintAbsorber.MonadCatch   as PY
+import qualified Polysemy.Error                           as PY
+import qualified Polysemy.Managed                         as PY
+import qualified Polysemy.Resource                        as PY
+import qualified System.Directory                         as IO
+import qualified System.IO                                as IO
+import qualified System.IO.Unsafe                         as IO
+import qualified UnliftIO.Async                           as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Redundant do"              -}
 {- HLINT ignore "Reduce duplication"        -}
 
 runSyncToArchive :: Z.SyncToArchiveOptions -> IO ()
-runSyncToArchive opts = do
-  let hostEndpoint        = opts ^. the @"hostEndpoint"
-  let storePath           = opts ^. the @"storePath"
-  let archiveUri          = opts ^. the @"archiveUri"
-  let threads             = opts ^. the @"threads"
-  let awsLogLevel         = opts ^. the @"awsLogLevel"
-  let versionedArchiveUri = archiveUri </> archiveVersion
-  let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
-  let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
+runSyncToArchive opts = PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO . PY.onFatalErrorExit . PY.onSomeExceptionErrorExit $ do
+    let hostEndpoint        = opts ^. the @"hostEndpoint"
+    let storePath           = opts ^. the @"storePath"
+    let archiveUri          = opts ^. the @"archiveUri"
+    let threads             = opts ^. the @"threads"
+    let awsLogLevel         = opts ^. the @"awsLogLevel"
+    let versionedArchiveUri = archiveUri </> archiveVersion
+    let storePathHash       = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
+    let scopedArchiveUri    = versionedArchiveUri </> T.pack storePathHash
 
-  CIO.putStrLn $ "Store path: "       <> toText storePath
-  CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-  CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
-  CIO.putStrLn $ "Archive version: "  <> archiveVersion
-  CIO.putStrLn $ "Threads: "          <> tshow threads
-  CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
+    CIO.putStrLn $ "Store path: "       <> toText storePath
+    CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
+    CIO.putStrLn $ "Archive URI: "      <> toText archiveUri
+    CIO.putStrLn $ "Archive version: "  <> archiveVersion
+    CIO.putStrLn $ "Threads: "          <> tshow threads
+    CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  tEarlyExit <- STM.newTVarIO False
+    tEarlyExit <- liftIO $ STM.newTVarIO False
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+    planJson <- PY.fromEitherM (liftIO (Z.loadPlan $ opts ^. the @"buildPath"))
+      & do PY.absorbError @AppError \e -> do
+            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError e
+            PY.throw PY.FatalError
 
-  case mbPlan of
-    Right planJson -> do
-      compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
+    compilerContext <- Z.mkCompilerContext planJson
+      & do PY.absorbError @Text \msg -> do
+            CIO.hPutStrLn IO.stderr msg
+            PY.throw PY.FatalError
 
-      case compilerContextResult of
-        Right compilerContext -> do
-          let compilerId = planJson ^. the @"compilerId"
-          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-            Nothing -> s))
-            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-          let archivePath       = versionedArchiveUri </> compilerId
-          let scopedArchivePath = scopedArchiveUri </> compilerId
-          IO.createLocalDirectoryIfMissing archivePath
-          IO.createLocalDirectoryIfMissing scopedArchivePath
+    let compilerId = planJson ^. the @"compilerId"
+    envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+      Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+      Nothing -> s))
+      $ mkEnv (opts ^. the @"region") (\ll bs -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ AWS.awsLogger awsLogLevel ll bs)
+    let archivePath       = versionedArchiveUri </> compilerId
+    let scopedArchivePath = scopedArchiveUri </> compilerId
 
-          packages     <- Z.getPackages storePath planJson
-          nonShareable <- packages & filterM (fmap not . isShareable storePath)
-          let planData = buildPlanData planJson (nonShareable ^.. each . the @"packageId")
+    PY.absorbMonadCatch $ IO.createLocalDirectoryIfMissing archivePath
 
-          let storeCompilerPath           = storePath </> T.unpack compilerId
-          let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+    PY.absorbMonadCatch $ IO.createLocalDirectoryIfMissing scopedArchivePath
 
-          storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
+    packages     <- liftIO $ Z.getPackages storePath planJson
+    nonShareable <- packages & filterM (fmap not . isShareable storePath)
+    let planData = buildPlanData planJson (nonShareable ^.. each . the @"packageId")
 
-          unless storeCompilerPackageDbPathExists $
-            GhcPkg.init compilerContext storeCompilerPackageDbPath
+    let storeCompilerPath           = storePath </> T.unpack compilerId
+    let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
 
-          CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
+    storeCompilerPackageDbPathExists <- liftIO $ doesDirectoryExist storeCompilerPackageDbPath
 
-          IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-            CIO.putStrLn $ "Temp path: " <> tshow tempPath
+    unless storeCompilerPackageDbPathExists $
+      liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-            IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
-              earlyExit <- STM.readTVarIO tEarlyExit
-              unless earlyExit $ do
-                let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
-                let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
-                let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
-                let packageStorePath    = storePath </> Z.packageDir pInfo
+    CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
 
-                -- either write "normal" package, or a user-specific one if the package cannot be shared
-                let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
+    PY.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
+      CIO.putStrLn $ "Temp path: " <> tshow tempPath
 
-                archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
+      liftIO $ IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO . PY.runManaged . PY.onFatalErrorExit . PY.onSomeExceptionErrorExit $ do
+        earlyExit <- liftIO $ STM.readTVarIO tEarlyExit
+        unless earlyExit $ do
+          let archiveFileBasename = Z.packageDir pInfo <.> ".tar.gz"
+          let archiveFile         = versionedArchiveUri </> T.pack archiveFileBasename
+          let scopedArchiveFile   = versionedArchiveUri </> T.pack storePathHash </> T.pack archiveFileBasename
+          let packageStorePath    = storePath </> Z.packageDir pInfo
 
-                unless archiveFileExists $ do
-                  packageStorePathExists <- doesDirectoryExist packageStorePath
+          -- either write "normal" package, or a user-specific one if the package cannot be shared
+          let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
-                  when packageStorePathExists $ void $ runExceptT $ IO.exceptWarn $ do
-                    let workingStorePackagePath = tempPath </> Z.packageDir pInfo
-                    liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
+          archiveFileExists <- IO.resourceExists envAws targetFile
+            & do PY.absorbError @AppError \e -> do
+                  CIO.hPutStrLn IO.stderr $ tshow e
+                  PY.throw PY.FatalError
 
-                    let rp2 = Z.relativePaths storePath pInfo
+          unless archiveFileExists $ do
+            packageStorePathExists <- liftIO $ doesDirectoryExist packageStorePath
 
-                    CIO.putStrLn $ "Creating " <> toText targetFile
+            when packageStorePathExists $ void $ do
+              let workingStorePackagePath = tempPath </> Z.packageDir pInfo
+              liftIO $ IO.createDirectoryIfMissing True workingStorePackagePath
 
-                    let tempArchiveFile = tempPath </> archiveFileBasename
+              let rp2 = Z.relativePaths storePath pInfo
 
-                    metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+              CIO.putStrLn $ "Creating " <> toText targetFile
 
-                    IO.createTar tempArchiveFile (rp2 <> [metas])
+              let tempArchiveFile = tempPath </> archiveFileBasename
 
-                    void $ catchError (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile) $ \case
+              metas <- createMetadata tempPath pInfo [("store-path", LC8.pack storePath)]
+
+              IO.createTar tempArchiveFile (rp2 <> [metas])
+                & do PY.absorbError @AppError \e -> do
+                      CIO.hPutStrLn IO.stderr $ tshow e
+                      PY.throw PY.FatalError
+
+              void $ (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile)
+                & do PY.absorbError @AppError \case
                       e@(AwsAppError (HTTP.Status 301 _)) -> do
                         liftIO $ STM.atomically $ STM.writeTVar tEarlyExit True
                         CIO.hPutStrLn IO.stderr $ mempty
@@ -154,14 +169,10 @@ runSyncToArchive opts = do
                           <> " " <> displayAppError e
 
                       _ -> return ()
-        Left msg -> CIO.hPutStrLn IO.stderr msg
 
-    Left (appError :: AppError) -> do
-      CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
+    earlyExit <- liftIO $ STM.readTVarIO tEarlyExit
 
-  earlyExit <- STM.readTVarIO tEarlyExit
-
-  when earlyExit $ CIO.hPutStrLn IO.stderr "Early exit due to error"
+    when earlyExit $ CIO.hPutStrLn IO.stderr "Early exit due to error"
 
 isShareable :: MonadIO m => FilePath -> Z.PackageInfo -> m Bool
 isShareable storePath pkg =

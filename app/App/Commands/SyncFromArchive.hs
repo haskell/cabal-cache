@@ -1,36 +1,39 @@
+{-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE DataKinds           #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
+{-# LANGUAGE TypeOperators       #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module App.Commands.SyncFromArchive
   ( cmdSyncFromArchive
   ) where
 
-import Antiope.Core                     (Region (..), runResAws, toText)
 import Antiope.Env                      (mkEnv)
+import Antiope.Core
 import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
+import Control.Exception                (SomeException)
 import Control.Monad.Except
-import Control.Monad.Trans.AWS          (envOverride, setEndpoint, AWST', Env)
-import Control.Monad.Trans.Resource     (ResourceT)
+import Control.Monad.Trans.AWS          (setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
 import Data.Maybe
 import Data.Monoid
 import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
+import HaskellWorks.CabalCache.IO.Error (maybeToExcept, exceptWarn)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
 import HaskellWorks.CabalCache.Show
-import HaskellWorks.CabalCache.Types    (PackageId)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              hiding (columns)
+import Polysemy                         (Member, Sem)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types                       as Z
@@ -52,10 +55,15 @@ import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
 import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
+import qualified HaskellWorks.CabalCache.Polysemy.Error           as PY
+import qualified HaskellWorks.CabalCache.Polysemy.Temp            as PY
 import qualified HaskellWorks.CabalCache.Types                    as Z
+import qualified Polysemy                                         as PY
+import qualified Polysemy.Error                                   as PY
+import qualified Polysemy.Resource                                as PY
+import qualified Polysemy.Managed                                 as PY
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
-import qualified System.IO.Temp                                   as IO
 import qualified System.IO.Unsafe                                 as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
@@ -66,7 +74,7 @@ skippable :: Z.Package -> Bool
 skippable package = package ^. the @"packageType" == "pre-existing"
 
 runSyncFromArchive :: Z.SyncFromArchiveOptions -> IO ()
-runSyncFromArchive opts = do
+runSyncFromArchive opts =PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO . PY.onFatalErrorExit . PY.onSomeExceptionErrorExit $ do
   let hostEndpoint          = opts ^. the @"hostEndpoint"
   let storePath             = opts ^. the @"storePath"
   let archiveUris           = opts ^. the @"archiveUris"
@@ -84,130 +92,147 @@ runSyncFromArchive opts = do
   CIO.putStrLn $ "Threads: "          <> tshow threads
   CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
 
-  mbPlan <- Z.loadPlan $ opts ^. the @"buildPath"
+  mbPlan <- liftIO $ Z.loadPlan $ opts ^. the @"buildPath"
 
   case mbPlan of
     Right planJson -> do
-      compilerContextResult <- runExceptT $ Z.mkCompilerContext planJson
+      compilerContext <- Z.mkCompilerContext planJson
+        & do PY.absorbError @Text \e -> do
+              CIO.hPutStrLn IO.stderr e
+              PY.throw PY.FatalError
 
-      case compilerContextResult of
-        Right compilerContext -> do
-          GhcPkg.testAvailability compilerContext
+      liftIO $ GhcPkg.testAvailability compilerContext
 
-          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-            Nothing -> s))
-            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
-          let compilerId                  = planJson ^. the @"compilerId"
-          let storeCompilerPath           = storePath </> T.unpack compilerId
-          let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
-          let storeCompilerLibPath        = storeCompilerPath </> "lib"
+      envAws <- liftIO $ IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+        Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+        Nothing -> s))
+        $ mkEnv (opts ^. the @"region") (\ll bs -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ AWS.awsLogger awsLogLevel ll bs)
+      let compilerId                  = planJson ^. the @"compilerId"
+      let storeCompilerPath           = storePath </> T.unpack compilerId
+      let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"
+      let storeCompilerLibPath        = storeCompilerPath </> "lib"
 
-          CIO.putStrLn "Creating store directories"
-          createDirectoryIfMissing True storePath
-          createDirectoryIfMissing True storeCompilerPath
-          createDirectoryIfMissing True storeCompilerLibPath
+      CIO.putStrLn "Creating store directories"
+      liftIO $ createDirectoryIfMissing True storePath
+      liftIO $ createDirectoryIfMissing True storeCompilerPath
+      liftIO $ createDirectoryIfMissing True storeCompilerLibPath
 
-          storeCompilerPackageDbPathExists <- doesDirectoryExist storeCompilerPackageDbPath
+      storeCompilerPackageDbPathExists <- liftIO $ doesDirectoryExist storeCompilerPackageDbPath
 
-          unless storeCompilerPackageDbPathExists $ do
-            CIO.putStrLn "Package DB missing. Creating Package DB"
-            GhcPkg.init compilerContext storeCompilerPackageDbPath
+      unless storeCompilerPackageDbPathExists $ do
+        CIO.putStrLn "Package DB missing. Creating Package DB"
+        liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-          packages <- Z.getPackages storePath planJson
+      packages <- liftIO $ Z.getPackages storePath planJson
 
-          let installPlan = planJson ^. the @"installPlan"
-          let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
+      let installPlan = planJson ^. the @"installPlan"
+      let planPackages = M.fromList $ fmap (\p -> (p ^. the @"id", p)) installPlan
 
-          let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
-                <> (p ^. the @"depends")
-                <> (p ^. the @"exeDepends")
-                <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
-                <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
-          let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
+      let planDeps0 = installPlan >>= \p -> fmap (p ^. the @"id", ) $ mempty
+            <> (p ^. the @"depends")
+            <> (p ^. the @"exeDepends")
+            <> (p ^.. the @"components" . each . the @"lib" . each . the @"depends"    . each)
+            <> (p ^.. the @"components" . each . the @"lib" . each . the @"exeDepends" . each)
+      let planDeps  = planDeps0 <> fmap (\p -> ("[universe]", p ^. the @"id")) installPlan
 
-          downloadQueue <- STM.atomically $ DQ.createDownloadQueue planDeps
+      downloadQueue <- liftIO $ STM.atomically $ DQ.createDownloadQueue planDeps
 
-          let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
+      let pInfos = M.fromList $ fmap (\p -> (p ^. the @"packageId", p)) packages
 
-          IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-            IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
+      PY.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
+        liftIO $ IO.createDirectoryIfMissing True (tempPath </> T.unpack compilerId </> "package.db")
 
-            IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
-              Just pInfo -> do
-                let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
-                let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
-                let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
-                let packageStorePath    = storePath </> Z.packageDir pInfo
-                let maybePackage        = M.lookup packageId planPackages
+        liftIO $ IO.forkThreadsWait threads $ DQ.runQueue downloadQueue $ \packageId -> case M.lookup packageId pInfos of
+          Just pInfo -> do
+            let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
+            let archiveFiles        = versionedArchiveUris & each %~ (</> T.pack archiveBaseName)
+            let scopedArchiveFiles  = scopedArchiveUris & each %~ (</> T.pack archiveBaseName)
+            let packageStorePath    = storePath </> Z.packageDir pInfo
+            let maybePackage        = M.lookup packageId planPackages
 
-                storeDirectoryExists <- doesDirectoryExist packageStorePath
+            storeDirectoryExists <- doesDirectoryExist packageStorePath
 
-                case maybePackage of
-                  Nothing -> do
-                    CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
-                    return DQ.DownloadSuccess
-                  Just package -> if skippable package
-                    then do
-                      CIO.putStrLn $ "Skipping: " <> packageId
-                      return DQ.DownloadSuccess
-                    else if storeDirectoryExists
-                      then return DQ.DownloadSuccess
-                      else runResAws envAws $ onError (cleanupStorePath packageStorePath packageId) DQ.DownloadFailure $ do
-                        (existingArchiveFileContents, existingArchiveFile) <- ExceptT $ IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
-                        CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
-
-                        let tempArchiveFile = tempPath </> archiveBaseName
-                        liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
-                        IO.extractTar tempArchiveFile storePath
-
-                        meta <- loadMetadata packageStorePath
-                        oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
-
-                        case Z.confPath pInfo of
-                          Z.Tagged conf _ -> do
-                            let theConfPath = storePath </> conf
-                            let tempConfPath = tempPath </> conf
-                            confPathExists <- liftIO $ IO.doesFileExist theConfPath
-                            when confPathExists $ do
-                              confContents <- liftIO $ LBS.readFile theConfPath
-                              liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
-                              liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
-
-                            return DQ.DownloadSuccess
-              Nothing -> do
-                CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
+            case maybePackage of
+              Nothing -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ do
+                CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageId
                 return DQ.DownloadSuccess
+              Just package -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO . PY.runManaged $ do
+                result <- PY.runError @AppError . PY.runError @SomeException $ if skippable package
+                  then do
+                    CIO.putStrLn $ "Skipping: " <> packageId
+                    return DQ.DownloadSuccess
+                  else if storeDirectoryExists
+                    then return DQ.DownloadSuccess
+                    else myOnError (cleanupStorePath packageStorePath packageId) DQ.DownloadFailure $ do
+                      (existingArchiveFileContents, existingArchiveFile) <- IO.readFirstAvailableResource envAws (foldMap L.tuple2ToList (L.zip archiveFiles scopedArchiveFiles))
+                      CIO.putStrLn $ "Extracting: " <> toText existingArchiveFile
+                      let tempArchiveFile = tempPath </> archiveBaseName
+                      liftIO $ LBS.writeFile tempArchiveFile existingArchiveFileContents
+                      IO.extractTar tempArchiveFile storePath
+                      meta <- loadMetadata packageStorePath
+                      oldStorePath <- maybeToExcept "store-path is missing from Metadata" (Map.lookup "store-path" meta)
+                      case Z.confPath pInfo of
+                        Z.Tagged conf _ -> do
+                          let theConfPath = storePath </> conf
+                          let tempConfPath = tempPath </> conf
+                          confPathExists <- liftIO $ IO.doesFileExist theConfPath
+                          when confPathExists $ do
+                            confContents <- liftIO $ LBS.readFile theConfPath
+                            liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
+                            liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
 
-          CIO.putStrLn "Recaching package database"
-          GhcPkg.recache compilerContext storeCompilerPackageDbPath
+                          return DQ.DownloadSuccess
 
-          failures <- STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
+                case result of
+                  Right (Right a) -> return a
+                  Right (Left e) -> do
+                    CIO.hPutStrLn IO.stderr $ tshow e
+                    return DQ.DownloadFailure
+                  Left e -> do
+                    CIO.hPutStrLn IO.stderr $ displayAppError  e
+                    return DQ.DownloadFailure
+          Nothing -> PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ do
+            CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
+            return DQ.DownloadSuccess
 
-          forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
-        Left msg -> CIO.hPutStrLn IO.stderr msg
+      CIO.putStrLn "Recaching package database"
+      liftIO $ GhcPkg.recache compilerContext storeCompilerPackageDbPath
+
+      failures <- liftIO $ STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
+
+      forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
     Left appError -> do
       CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> displayAppError appError
 
   return ()
 
-cleanupStorePath :: FilePath -> PackageId -> AppError -> AWST' Env (ResourceT IO) ()
+cleanupStorePath :: ()
+  => Member (PY.Embed IO            ) r
+  => Member (PY.Error AppError      ) r
+  => Member (PY.Error SomeException ) r
+  => Member (PY.Managed             ) r
+  => Member (PY.Resource            ) r
+  => FilePath
+  -> Z.PackageId
+  -> AppError
+  -> Sem r ()
 cleanupStorePath packageStorePath packageId e = do
   CIO.hPutStrLn IO.stderr $ "Warning: Sync failure: " <> packageId <> ", reason: " <> displayAppError e
   pathExists <- liftIO $ IO.doesPathExist packageStorePath
   when pathExists $ void $ IO.removePathRecursive packageStorePath
 
-onError :: ()
-  => (AppError -> AWST' Env (ResourceT IO) ())
+myOnError :: forall r. ()
+  => Member (PY.Embed IO) r
+  => Member (PY.Resource) r
+  => (AppError -> Sem r ())
   -> DQ.DownloadStatus
-  -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
-  -> AWST' Env (ResourceT IO) DQ.DownloadStatus
-onError h failureValue f = do
-  result <- runExceptT $ catchError (exceptWarn f) handler
+  -> Sem (PY.Error AppError ': r) DQ.DownloadStatus
+  -> Sem r DQ.DownloadStatus
+myOnError h failureValue f = do
+  result <- PY.runError @AppError $ exceptWarn f
   case result of
-    Left _  -> return failureValue
+    Left e  -> h e >> return failureValue
     Right a -> return a
-  where handler e = lift (h e) >> return failureValue
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
