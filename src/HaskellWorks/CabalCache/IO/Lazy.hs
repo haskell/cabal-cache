@@ -28,6 +28,7 @@ import Data.Either                      (isRight)
 import Data.Generics.Product.Any
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..))
+import HaskellWorks.CabalCache.RT       (runRT)
 import HaskellWorks.CabalCache.Show
 import Network.URI                      (URI)
 
@@ -121,7 +122,7 @@ resourceExists envAws = \case
             resourceExists envAws (Local target)
           else return False
   Uri uri       -> case uri ^. the @"uriScheme" of
-    "s3:"   -> isRight <$> runResourceT (headS3Uri envAws (reslashUri uri))
+    "s3:"   -> isRight <$> runRT (headS3Uri envAws (reslashUri uri))
     "http:" -> isRight <$> headHttpUri (reslashUri uri)
     _scheme -> return False
 
@@ -172,7 +173,7 @@ copyS3Uri envAws source target = do
   AWS.S3Uri sourceBucket sourceObjectKey <- except $ uriToS3Uri (reslashUri source)
   AWS.S3Uri targetBucket targetObjectKey <- except $ uriToS3Uri (reslashUri target)
   ExceptT $ do
-    responseResult <- runResourceT $
+    responseResult <- runRT $
       handleAwsError $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
     case responseResult of
       Right response -> do

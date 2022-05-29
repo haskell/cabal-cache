@@ -17,7 +17,6 @@ import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOpti
 import Control.Applicative
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Except
-import Control.Monad.Trans.Resource     (runResourceT)
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
@@ -27,6 +26,7 @@ import Data.Monoid
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (createMetadata)
+import HaskellWorks.CabalCache.RT       (runRT)
 import HaskellWorks.CabalCache.Show
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
@@ -126,7 +126,7 @@ runSyncToArchive opts = do
                 -- either write "normal" package, or a user-specific one if the package cannot be shared
                 let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
-                archiveFileExists <- runResourceT $ IO.resourceExists envAws targetFile
+                archiveFileExists <- runRT $ IO.resourceExists envAws targetFile
 
                 unless archiveFileExists $ do
                   packageStorePathExists <- doesDirectoryExist packageStorePath

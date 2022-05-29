@@ -14,6 +14,7 @@ import Control.Monad.IO.Class
 import Data.Maybe                       (isJust)
 import HaskellWorks.CabalCache.AppError
 import HaskellWorks.CabalCache.IO.Lazy
+import HaskellWorks.CabalCache.RT       (runRT)
 import HaskellWorks.Hspec.Hedgehog
 import Hedgehog
 import Test.Hspec
@@ -34,7 +35,7 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
     unless ci $ do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)
       let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
-      result <- liftIO $ runResourceT $ headS3Uri envAws uri
+      result <- liftIO $ runRT $ headS3Uri envAws uri
       result === Left AwsAppError
         { status = HTTP.Status { HTTP.statusCode = 404 , HTTP.statusMessage = "Not Found" }
         }
