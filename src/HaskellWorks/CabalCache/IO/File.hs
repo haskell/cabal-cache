@@ -6,8 +6,8 @@ module HaskellWorks.CabalCache.IO.File
   , listMaybeDirectory
   ) where
 
-import Control.Monad.Except
-import Polysemy             (Member, Sem)
+import Control.Monad.Except (MonadIO(..), ExceptT, MonadTrans(lift), MonadError(throwError))
+import Polysemy (Member, Sem)
 
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO

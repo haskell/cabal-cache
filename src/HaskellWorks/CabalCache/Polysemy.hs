@@ -8,10 +8,13 @@ module HaskellWorks.CabalCache.Polysemy
   ( runMainEffects
   ) where
 
-import Polysemy
-import Polysemy.Resource (Resource, resourceToIOFinal)
+import Polysemy (Embed, Sem, Final)
+import Polysemy.Resource (Resource)
+
+import qualified Polysemy           as PY
+import qualified Polysemy.Resource  as PY
 
 runMainEffects :: Sem '[Embed IO, Resource, Final IO] a -> IO a
-runMainEffects = runFinal
-  . resourceToIOFinal
-  . embedToFinal
+runMainEffects = PY.runFinal
+  . PY.resourceToIOFinal
+  . PY.embedToFinal

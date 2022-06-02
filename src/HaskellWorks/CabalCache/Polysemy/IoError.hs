@@ -21,20 +21,21 @@ module HaskellWorks.CabalCache.Polysemy.IoError
   , ioThrow
   ) where
 
-import Polysemy
-import Polysemy.Error
+import Polysemy (Member, Embed, Sem)
+import Polysemy.Error (throw, Error)
 
-import qualified Control.Exception as E
+import qualified Polysemy           as PY
+import qualified Control.Exception  as E
 
 data IoError m a where
   IoThrow :: E.Exception e => e -> IoError m a
   IoCatch :: E.Exception e => m a -> (e -> m a) -> IoError m a
 
-makeSem ''IoError
+PY.makeSem ''IoError
 
 withIoError :: forall e r a . (E.Exception e, Member (Embed IO) r, Member (Error e) r) => IO a -> Sem r a
 withIoError action = do
-  res <- embed $ E.try action
+  res <- PY.embed $ E.try action
   case res of
        Left e  -> throw @e e
        Right x -> pure x
@@ -43,10 +44,10 @@ withException :: forall e r a . (E.Exception e, Member IoError r, Member (Error 
 withException action = ioCatch @_ @e action throw
 
 lowerIoError :: Member (Embed IO) r => (forall x. Sem r x -> IO x) -> Sem (IoError ': r) a -> Sem r a
-lowerIoError lower = interpretH $ \case
-  IoThrow e -> embed $ E.throwIO e
+lowerIoError lower = PY.interpretH $ \case
+  IoThrow e -> PY.embed $ E.throwIO e
   IoCatch m h -> do
-    m' <- lowerIoError lower <$> runT m
-    h' <- (lowerIoError lower .) <$> bindT h
-    s  <- getInitialStateT
-    embed $ lower m' `E.catch` \e -> lower (h' (e <$ s))
+    m' <- lowerIoError lower <$> PY.runT m
+    h' <- (lowerIoError lower .) <$> PY.bindT h
+    s  <- PY.getInitialStateT
+    PY.embed $ lower m' `E.catch` \e -> lower (h' (e <$ s))

@@ -1,15 +1,15 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module HaskellWorks.CabalCache.AWS.Env
+module HaskellWorks.CabalCache.Aws.Env
   ( awsLogger
   ) where
 
-import Antiope.Env                  (LogLevel (..))
-import Control.Concurrent           (myThreadId)
-import Control.Monad
+import Antiope.Env (LogLevel (..))
+import Control.Concurrent (myThreadId)
+import Control.Monad (when, forM_)
 import Control.Monad.IO.Class (MonadIO(..))
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show (tshow)
 import Polysemy (Member, Sem)
 
 import qualified Data.ByteString.Lazy               as LBS

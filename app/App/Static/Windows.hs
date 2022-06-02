@@ -1,6 +1,6 @@
 module App.Static.Windows where
 
-import Data.Maybe
+import Data.Maybe (fromMaybe)
 import HaskellWorks.CabalCache.Location ((</>))
 
 import qualified App.Static.Base    as S

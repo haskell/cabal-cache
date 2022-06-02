@@ -9,13 +9,14 @@ module App.Commands.Version
   ) where
 
 import App.Commands.Options.Parser (optsVersion)
-import Data.List
-import Options.Applicative         hiding (columns)
+import Options.Applicative (CommandFields, Mod)
 
 import qualified App.Commands.Options.Types         as Z
+import qualified Data.List                          as L
 import qualified Data.Text                          as T
 import qualified Data.Version                       as V
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Options.Applicative                as OA
 import qualified Paths_cabal_cache                  as P
 import qualified Polysemy                           as PY
 import qualified Polysemy.Resource                  as PY
@@ -27,9 +28,9 @@ runVersion :: Z.VersionOptions -> IO ()
 runVersion _ = PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ do
   let V.Version {..} = P.version
 
-  let version = intercalate "." $ fmap show versionBranch
+  let version = L.intercalate "." $ fmap show versionBranch
 
   CIO.putStrLn $ "cabal-cache " <> T.pack version
 
 cmdVersion :: Mod CommandFields (IO ())
-cmdVersion = command "version"  $ flip info idm $ runVersion <$> optsVersion
+cmdVersion = OA.command "version"  $ flip OA.info OA.idm $ runVersion <$> optsVersion

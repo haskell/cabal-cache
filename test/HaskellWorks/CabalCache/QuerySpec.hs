@@ -6,14 +6,15 @@ module HaskellWorks.CabalCache.QuerySpec
   ( spec
   ) where
 
-import HaskellWorks.Hspec.Hedgehog
-import Hedgehog
-import Test.Hspec
-import Text.RawString.QQ
 
-import qualified Data.Aeson                    as A
-import qualified Data.ByteString.Lazy          as LBS
-import qualified HaskellWorks.CabalCache.Types as Z
+import Hedgehog ((===))
+import Test.Hspec (it, describe, Spec)
+import Text.RawString.QQ (r)
+
+import qualified Data.Aeson                     as A
+import qualified Data.ByteString.Lazy           as LBS
+import qualified HaskellWorks.CabalCache.Types  as Z
+import qualified HaskellWorks.Hspec.Hedgehog    as H
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -21,7 +22,7 @@ import qualified HaskellWorks.CabalCache.Types as Z
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.QuerySpec" $ do
-  it "stub" $ requireTest $ do
+  it "stub" $ H.requireTest $ do
     case A.eitherDecode exampleJson of
       Right planJson -> do
         planJson === Z.PlanJson

@@ -7,10 +7,10 @@ module HaskellWorks.CabalCache.AppError
   , appErrorStatus
   ) where
 
-import Data.String
-import Data.Text                    (Text)
-import GHC.Generics
-import HaskellWorks.CabalCache.Show
+import Data.String (IsString(..))
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import HaskellWorks.CabalCache.Show (tshow)
 
 import qualified Data.Text          as T
 import qualified Network.HTTP.Types as HTTP

@@ -1,31 +1,29 @@
 {-# LANGUAGE DataKinds              #-}
 {-# LANGUAGE DeriveGeneric          #-}
 {-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiWayIf             #-}
 {-# LANGUAGE OverloadedStrings      #-}
 {-# LANGUAGE TypeApplications       #-}
 {-# LANGUAGE TypeFamilies           #-}
 
 module HaskellWorks.CabalCache.Location
-( IsPath(..)
-, Location(..)
-, toLocation
-)
-where
+  ( IsPath(..)
+  , Location(..)
+  , toLocation
+  ) where
 
-import Antiope.Core                 (ToText (..))
-import Antiope.S3                   (ObjectKey (..), S3Uri (..))
-import Control.Lens                 hiding ((<.>))
-import Data.Generics.Product.Any
-import Data.Maybe                   (fromMaybe)
-import Data.Text                    (Text)
-import GHC.Generics                 (Generic)
-import HaskellWorks.CabalCache.Show
-import Network.URI                  (URI)
+import Antiope.Core (ToText (..))
+import Antiope.S3 (ObjectKey (..), S3Uri (..))
+import Control.Lens ((%~), (&))
+import Data.Generics.Product.Any (HasAny(the) )
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import HaskellWorks.CabalCache.Show ( tshow )
+import Network.URI (URI)
 
-import qualified Data.Text       as T
-import qualified Network.URI     as URI
-import qualified System.FilePath as FP
+import qualified Data.Text        as T
+import qualified Network.URI      as URI
+import qualified System.FilePath  as FP
 
 class IsPath a s | a -> s where
   (</>) :: a -> s -> a

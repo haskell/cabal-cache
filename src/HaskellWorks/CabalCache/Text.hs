@@ -2,8 +2,8 @@ module HaskellWorks.CabalCache.Text
   ( maybeStripPrefix
   ) where
 
-import Data.Maybe
-import Data.Text  (Text)
+import Data.Maybe (fromMaybe)
+import Data.Text (Text)
 
 import qualified Data.Text as T
 

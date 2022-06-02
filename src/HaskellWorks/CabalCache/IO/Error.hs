@@ -11,11 +11,11 @@ module HaskellWorks.CabalCache.IO.Error
   , catchErrno
   ) where
 
-import Control.Monad.Except
-import Foreign.C.Error                  (Errno, getErrno)
-import HaskellWorks.CabalCache.AppError
-import Polysemy                         (Member, Sem)
-import System.IO.Error                  (catchIOError)
+import Control.Monad.Except (void, MonadIO(liftIO), ExceptT(..), MonadTrans(lift), MonadError(catchError, throwError))
+import Foreign.C.Error (Errno, getErrno)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
+import Polysemy (Member, Sem)
+import System.IO.Error (catchIOError)
 
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified Polysemy.Embed                     as PY

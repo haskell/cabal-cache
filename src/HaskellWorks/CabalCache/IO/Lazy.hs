@@ -20,41 +20,41 @@ module HaskellWorks.CabalCache.IO.Lazy
   , removePathRecursive
   ) where
 
-import Antiope.Core
-import Antiope.S3.Lazy                  (S3Uri)
-import Control.Lens
-import Control.Monad.Catch
-import Control.Monad.Except
-import Data.Generics.Product.Any
-import HaskellWorks.CabalCache.AppError
+import Antiope.Core (ToText(toText), fromText, runAws, runResAws)
+import Antiope.S3.Lazy (S3Uri)
+import Control.Lens ((%~), (&), (^.))
+import Control.Monad.Catch (SomeException, MonadCatch(..), MonadThrow(throwM))
+import Control.Monad.Except (void, unless, MonadIO(..))
+import Data.Generics.Product.Any (HasAny(the))
+import HaskellWorks.CabalCache.AppError (AppError(AwsAppError, HttpAppError, NotFound, RetriesFailedAppError, GenericAppError), appErrorStatus)
 import HaskellWorks.CabalCache.Location (Location (..))
-import HaskellWorks.CabalCache.Show
-import Network.URI                      (URI)
+import HaskellWorks.CabalCache.Show (tshow)
+import Network.URI (URI)
 import Polysemy (Member, Sem)
 
-import qualified Antiope.S3.Lazy                          as AWS
-import qualified Control.Concurrent                       as IO
-import qualified Control.Monad.Catch                      as MC
-import qualified Data.ByteString.Lazy                     as LBS
-import qualified Data.Text                                as T
-import qualified HaskellWorks.CabalCache.IO.Console       as CIO
-import qualified HaskellWorks.CabalCache.Polysemy.Error   as PY
-import qualified Network.AWS                              as AWS
-import qualified Network.AWS.S3.CopyObject                as AWS
-import qualified Network.AWS.S3.HeadObject                as AWS
-import qualified Network.AWS.S3.PutObject                 as AWS
-import qualified Network.HTTP.Client                      as HTTP
-import qualified Network.HTTP.Client.TLS                  as HTTPS
-import qualified Network.HTTP.Types                       as HTTP
-import qualified Polysemy.ConstraintAbsorber.MonadCatch   as PY
-import qualified Polysemy.Embed                           as PY
-import qualified Polysemy.Error                           as PY
-import qualified Polysemy.Managed                         as PY
-import qualified Polysemy.Resource                        as PY
-import qualified System.Directory                         as IO
-import qualified System.FilePath.Posix                    as FP
-import qualified System.IO                                as IO
-import qualified System.IO.Error                          as IO
+import qualified Antiope.S3.Lazy                        as AWS
+import qualified Control.Concurrent                     as IO
+import qualified Control.Monad.Catch                    as MC
+import qualified Data.ByteString.Lazy                   as LBS
+import qualified Data.Text                              as T
+import qualified HaskellWorks.CabalCache.IO.Console     as CIO
+import qualified HaskellWorks.CabalCache.Polysemy.Error as PY
+import qualified Network.AWS                            as AWS
+import qualified Network.AWS.S3.CopyObject              as AWS
+import qualified Network.AWS.S3.HeadObject              as AWS
+import qualified Network.AWS.S3.PutObject               as AWS
+import qualified Network.HTTP.Client                    as HTTP
+import qualified Network.HTTP.Client.TLS                as HTTPS
+import qualified Network.HTTP.Types                     as HTTP
+import qualified Polysemy.ConstraintAbsorber.MonadCatch as PY
+import qualified Polysemy.Embed                         as PY
+import qualified Polysemy.Error                         as PY
+import qualified Polysemy.Managed                       as PY
+import qualified Polysemy.Resource                      as PY
+import qualified System.Directory                       as IO
+import qualified System.FilePath.Posix                  as FP
+import qualified System.IO                              as IO
+import qualified System.IO.Error                        as IO
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}

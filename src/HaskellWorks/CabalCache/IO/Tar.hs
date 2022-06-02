@@ -11,13 +11,13 @@ module HaskellWorks.CabalCache.IO.Tar
   , extractTar
   ) where
 
-import Control.DeepSeq                  (NFData)
-import Control.Lens
-import Control.Monad.Except
-import Data.Generics.Product.Any
-import GHC.Generics
-import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.Show
+import Control.DeepSeq (NFData)
+import Control.Lens ((^.))
+import Control.Monad.Except (MonadIO(liftIO))
+import Data.Generics.Product.Any (HasAny(the))
+import GHC.Generics (Generic)
+import HaskellWorks.CabalCache.AppError (AppError(GenericAppError))
+import HaskellWorks.CabalCache.Show (tshow)
 import Polysemy (Member, Sem)
 
 import qualified System.Exit    as IO

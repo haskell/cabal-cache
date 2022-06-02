@@ -6,10 +6,12 @@
 
 module HaskellWorks.CabalCache.Types where
 
-import Data.Aeson
-import Data.Text    (Text)
-import GHC.Generics
-import Prelude      hiding (id)
+import Data.Aeson ((.!=), (.:), (.:?), FromJSON(parseJSON))
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import Prelude hiding (id)
+
+import qualified Data.Aeson as J
 
 type CompilerId = Text
 type PackageId  = Text
@@ -45,12 +47,12 @@ newtype CompilerContext = CompilerContext
   } deriving (Show, Eq, Generic)
 
 instance FromJSON PlanJson where
-  parseJSON = withObject "PlanJson" $ \v -> PlanJson
+  parseJSON = J.withObject "PlanJson" $ \v -> PlanJson
     <$> v .: "compiler-id"
     <*> v .: "install-plan"
 
 instance FromJSON Package where
-  parseJSON = withObject "Package" $ \v -> do
+  parseJSON = J.withObject "Package" $ \v -> do
     packageType   <- v .:  "type"
     id            <- v .:  "id"
     name          <- v .:  "pkg-name"
@@ -63,10 +65,10 @@ instance FromJSON Package where
     return Package {..}
 
 instance FromJSON Components where
-  parseJSON = withObject "Components" $ \v -> Components
+  parseJSON = J.withObject "Components" $ \v -> Components
     <$> v .:? "lib"
 
 instance FromJSON Lib where
-  parseJSON = withObject "Lib" $ \v -> Lib
+  parseJSON = J.withObject "Lib" $ \v -> Lib
     <$> v .:? "depends"     .!= []
     <*> v .:? "exe-depends" .!= []

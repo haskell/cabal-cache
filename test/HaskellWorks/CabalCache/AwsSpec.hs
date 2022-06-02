@@ -8,27 +8,27 @@ module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
-import Antiope.Core
-import Antiope.Env
+import Antiope.Core (Region(Oregon))
+import Antiope.Env (mkEnv)
 import Control.Exception (SomeException)
-import Control.Lens
-import Control.Monad
-import Control.Monad.IO.Class
-import Data.Maybe                       (isJust)
-import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.IO.Lazy
-import HaskellWorks.Hspec.Hedgehog
-import Hedgehog
-import Test.Hspec
+import Control.Lens ((<&>))
+import Control.Monad (unless)
+import Control.Monad.IO.Class (MonadIO(liftIO))
+import Data.Maybe (isJust)
+import HaskellWorks.CabalCache.AppError (AppError(AwsAppError, status))
+import HaskellWorks.CabalCache.IO.Lazy (headS3Uri)
+import Hedgehog ((===))
+import Test.Hspec (Spec, describe, xit)
 
-import qualified Data.ByteString.Lazy.Char8 as LBSC
-import qualified Network.HTTP.Types         as HTTP
-import qualified Network.URI                as URI
-import qualified Polysemy                   as PY
-import qualified Polysemy.Error             as PY
-import qualified Polysemy.Managed          as PY
-import qualified Polysemy.Resource          as PY
-import qualified System.Environment         as IO
+import qualified Data.ByteString.Lazy.Char8   as LBSC
+import qualified HaskellWorks.Hspec.Hedgehog  as H
+import qualified Network.HTTP.Types           as HTTP
+import qualified Network.URI                  as URI
+import qualified Polysemy                     as PY
+import qualified Polysemy.Error               as PY
+import qualified Polysemy.Managed             as PY
+import qualified Polysemy.Resource            as PY
+import qualified System.Environment           as IO
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -36,7 +36,7 @@ import qualified System.Environment         as IO
 
 spec :: Spec
 spec = describe "HaskellWorks.CabalCache.QuerySpec" $ do
-  xit "stub" $ requireTest $ do
+  xit "stub" $ H.requireTest $ do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
     unless ci $ do
       envAws <- liftIO $ mkEnv Oregon (const LBSC.putStrLn)

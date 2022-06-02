@@ -18,8 +18,8 @@ module HaskellWorks.CabalCache.Polysemy.Error
   ) where
 
 import Control.Exception (SomeException)
-import Polysemy
-import Polysemy.Error
+import Polysemy (Member, Sem)
+import Polysemy.Error (Error)
 
 import qualified Polysemy.Embed as PY
 import qualified Polysemy.Error as PY
@@ -52,19 +52,19 @@ onFatalErrorExit :: ()
   => Sem (Error FatalError ': r) a
   -> Sem r a
 onFatalErrorExit f = do
-  result <- runError @FatalError f
+  result <- PY.runError @FatalError f
   case result of
     Right a         -> return a
-    Left FatalError -> embed IO.exitFailure
+    Left FatalError -> PY.embed IO.exitFailure
 
 onSomeExceptionErrorExit :: ()
   => Member (PY.Embed IO) r
   => Sem (Error SomeException ': r) a
   -> Sem r a
 onSomeExceptionErrorExit f = do
-  result <- runError @SomeException f
+  result <- PY.runError @SomeException f
   case result of
     Right a -> return a
     Left e  -> do
-      embed $ IO.hPutStrLn IO.stderr (show e)
-      embed IO.exitFailure
+      PY.embed $ IO.hPrint IO.stderr e
+      PY.embed IO.exitFailure

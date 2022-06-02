@@ -8,12 +8,13 @@ module HaskellWorks.CabalCache.Polysemy.Temp
   ) where
 
 import Polysemy (Member, Sem)
-import Polysemy.Embed qualified as PY
-import Polysemy.Resource qualified as PY
-import System.IO.Temp qualified as Temp
 import Control.Monad.IO.Class (liftIO)
-import System.Directory
-import Control.Monad.Catch qualified as MC
+
+import qualified System.Directory     as IO
+import qualified Polysemy.Embed       as PY
+import qualified Polysemy.Resource    as PY
+import qualified System.IO.Temp       as Temp
+import qualified Control.Monad.Catch  as MC
 
 withSystemTempDirectory :: ()
   => Member (PY.Embed IO) r
@@ -35,7 +36,7 @@ withTempDirectory :: ()
 withTempDirectory targetDir template =
   PY.bracket
     (liftIO (Temp.createTempDirectory targetDir template))
-    (liftIO . ignoringIOErrors . removeDirectoryRecursive)
+    (liftIO . ignoringIOErrors . IO.removeDirectoryRecursive)
 
 ignoringIOErrors :: MC.MonadCatch m => m () -> m ()
 ignoringIOErrors ioe = ioe `MC.catch` (\(_ :: IOError) -> return ())

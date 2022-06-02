@@ -17,22 +17,22 @@ module HaskellWorks.CabalCache.Core
   , mkCompilerContext
   ) where
 
-import Control.DeepSeq                  (NFData)
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Catch
-import Control.Monad.Except
-import Data.Aeson                       (eitherDecode)
-import Data.Bifunctor                   (first)
-import Data.Bool                        (bool)
-import Data.Generics.Product.Any        (the)
-import Data.String
-import Data.Text                        (Text)
-import GHC.Generics                     (Generic)
-import HaskellWorks.CabalCache.AppError
-import HaskellWorks.CabalCache.Error
-import HaskellWorks.CabalCache.Show
-import Polysemy                         (Member, Sem)
-import System.FilePath                  ((<.>), (</>))
+import Control.DeepSeq (NFData)
+import Control.Lens ((<&>), (&), (^.))
+import Control.Monad.Catch (SomeException, MonadCatch(catch))
+import Control.Monad.Except (MonadIO(liftIO), forM)
+import Data.Aeson (eitherDecode)
+import Data.Bifunctor (first)
+import Data.Bool (bool)
+import Data.Generics.Product.Any (the)
+import Data.String (IsString(fromString))
+import Data.Text (Text)
+import GHC.Generics (Generic)
+import HaskellWorks.CabalCache.AppError (AppError)
+import HaskellWorks.CabalCache.Error (nothingToError)
+import HaskellWorks.CabalCache.Show (tshow)
+import Polysemy (Member, Sem)
+import System.FilePath ((<.>), (</>))
 
 import qualified Data.ByteString.Lazy                   as LBS
 import qualified Data.List                              as L

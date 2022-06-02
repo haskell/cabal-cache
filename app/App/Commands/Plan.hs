@@ -8,18 +8,18 @@ module App.Commands.Plan
   ( cmdPlan
   ) where
 
-import Antiope.Core                     (toText)
-import App.Commands.Options.Types       (PlanOptions (PlanOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
-import Data.Generics.Product.Any        (the)
-import Data.Maybe
-import HaskellWorks.CabalCache.AppError
+import Antiope.Core (toText)
+import App.Commands.Options.Types (PlanOptions (PlanOptions))
+import Control.Applicative (optional)
+import Control.Lens ((<&>), (%~), (&), (^.), Each(each))
+import Control.Monad.Except (when, MonadIO(liftIO), forM)
+import Data.Generics.Product.Any (the)
+import Data.Maybe (fromMaybe)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
-import HaskellWorks.CabalCache.Show
-import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Options.Applicative              hiding (columns)
+import HaskellWorks.CabalCache.Show (tshow)
+import HaskellWorks.CabalCache.Version (archiveVersion)
+import Options.Applicative (CommandFields, Mod, Parser)
 
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
@@ -30,6 +30,7 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Options.Applicative                as OA
 import qualified Polysemy                           as PY
 import qualified Polysemy.Resource                  as PY
 import qualified System.IO                          as IO
@@ -79,31 +80,31 @@ runPlan opts = PY.runFinal . PY.resourceToIOFinal . PY.embedToFinal @IO $ do
 
 optsPlan :: Parser PlanOptions
 optsPlan = PlanOptions
-  <$> strOption
-      (   long "build-path"
-      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
-      <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+  <$> OA.strOption
+      (   OA.long "build-path"
+      <>  OA.help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.buildPath
       )
-  <*> strOption
-      (   long "store-path"
-      <>  help "Path to cabal store"
-      <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+  <*> OA.strOption
+      (   OA.long "store-path"
+      <>  OA.help "Path to cabal store"
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value (AS.cabalDirectory </> "store")
       )
   <*> optional
-      ( strOption
-        (   long "store-path-hash"
-        <>  help "Store path hash (do not use)"
-        <>  metavar "HASH"
+      ( OA.strOption
+        (   OA.long "store-path-hash"
+        <>  OA.help "Store path hash (do not use)"
+        <>  OA.metavar "HASH"
         )
       )
-  <*> strOption
-      (   long "output-file"
-      <>  help "Output file"
-      <>  metavar "FILE"
-      <>  value "-"
+  <*> OA.strOption
+      (   OA.long "output-file"
+      <>  OA.help "Output file"
+      <>  OA.metavar "FILE"
+      <>  OA.value "-"
       )
 
 cmdPlan :: Mod CommandFields (IO ())
-cmdPlan = command "plan"  $ flip info idm $ runPlan <$> optsPlan
+cmdPlan = OA.command "plan"  $ flip OA.info OA.idm $ runPlan <$> optsPlan

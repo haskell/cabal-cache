@@ -8,16 +8,16 @@ module HaskellWorks.CabalCache.IO.Console
   , hPrint
   ) where
 
-import Data.Text  (Text)
-import Polysemy   (Sem, Member)
-import Prelude    (IO, Show (..), ($), (.))
+import Data.Text (Text)
+import Polysemy (Sem, Member)
+import Prelude (IO, Show (..), ($), (.))
 
-import qualified Control.Concurrent.QSem as IO
-import qualified Data.Text.IO            as T
-import qualified Polysemy                as PY
-import qualified Polysemy.Resource       as PY
-import qualified System.IO               as IO
-import qualified System.IO.Unsafe        as IO
+import qualified Control.Concurrent.QSem  as IO
+import qualified Data.Text.IO             as T
+import qualified Polysemy                 as PY
+import qualified Polysemy.Resource        as PY
+import qualified System.IO                as IO
+import qualified System.IO.Unsafe         as IO
 
 sem :: IO.QSem
 sem = IO.unsafePerformIO $ IO.newQSem 1

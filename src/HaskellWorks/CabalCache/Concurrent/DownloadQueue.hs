@@ -1,5 +1,4 @@
 {-# LANGUAGE DataKinds         #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
 
 module HaskellWorks.CabalCache.Concurrent.DownloadQueue
@@ -10,13 +9,13 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ) where
 
 import Control.Monad.IO.Class
-import Data.Set               ((\\))
+import Data.Set ((\\))
 
-import qualified Control.Concurrent.STM                  as STM
-import qualified Data.Map                                as M
-import qualified Data.Relation                           as R
-import qualified Data.Set                                as S
-import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
+import qualified Control.Concurrent.STM                   as STM
+import qualified Data.Map                                 as M
+import qualified Data.Relation                            as R
+import qualified Data.Set                                 as S
+import qualified HaskellWorks.CabalCache.Concurrent.Type  as Z
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
 

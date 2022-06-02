@@ -9,20 +9,20 @@ module HaskellWorks.CabalCache.Topology
   , canShare
   ) where
 
-import Control.Arrow                 ((&&&))
-import Control.Lens                  (view, (&), (<&>), (^.))
-import Control.Monad                 (join)
-import Data.Either                   (fromRight)
-import Data.Generics.Product.Any     (the)
-import Data.Map.Strict               (Map)
-import Data.Maybe                    (fromMaybe)
-import Data.Set                      (Set)
-import GHC.Generics                  (Generic)
+import Control.Arrow ((&&&))
+import Control.Lens (view, (&), (<&>), (^.))
+import Control.Monad (join)
+import Data.Either (fromRight)
+import Data.Generics.Product.Any (the)
+import Data.Map.Strict (Map)
+import Data.Maybe (fromMaybe)
+import Data.Set (Set)
+import GHC.Generics (Generic)
 import HaskellWorks.CabalCache.Types (Package, PackageId, PlanJson)
 
-import qualified Data.Map.Strict as M
-import qualified Data.Set        as S
-import qualified Topograph       as TG
+import qualified Data.Map.Strict  as M
+import qualified Data.Set         as S
+import qualified Topograph        as TG
 
 newtype PlanData = PlanData
   { nonShareable :: Set PackageId
