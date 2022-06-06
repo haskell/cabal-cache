@@ -9,7 +9,7 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   , runQueue
   ) where
 
-import Control.Monad.IO.Class
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Set               ((\\))
 
 import qualified Control.Concurrent.STM                  as STM

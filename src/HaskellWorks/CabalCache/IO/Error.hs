@@ -9,9 +9,10 @@ module HaskellWorks.CabalCache.IO.Error
   , catchErrno
   ) where
 
-import Control.Monad.Except
+import Control.Monad                    (void)
+import Control.Monad.Except             (MonadError(throwError, catchError), MonadIO(..), ExceptT(..))
 import Foreign.C.Error                  (Errno, getErrno)
-import HaskellWorks.CabalCache.AppError
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
 import System.IO.Error                  (catchIOError)
 
 import qualified HaskellWorks.CabalCache.IO.Console as CIO

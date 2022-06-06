@@ -7,14 +7,15 @@ module App.Commands.Version
   ( cmdVersion
   ) where
 
-import App.Commands.Options.Parser (optsVersion)
-import Data.List
-import Options.Applicative         hiding (columns)
+import App.Commands.Options.Parser  (optsVersion)
+import Data.List                    (intercalate)
+import Options.Applicative          (Mod, CommandFields)
 
 import qualified App.Commands.Options.Types         as Z
 import qualified Data.Text                          as T
 import qualified Data.Version                       as V
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Options.Applicative                as OA
 import qualified Paths_cabal_cache                  as P
 
 {- HLINT ignore "Redundant do"        -}
@@ -29,4 +30,4 @@ runVersion _ = do
   CIO.putStrLn $ "cabal-cache " <> T.pack version
 
 cmdVersion :: Mod CommandFields (IO ())
-cmdVersion = command "version"  $ flip info idm $ runVersion <$> optsVersion
+cmdVersion = OA.command "version"  $ flip OA.info OA.idm $ runVersion <$> optsVersion

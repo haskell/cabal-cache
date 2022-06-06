@@ -106,7 +106,7 @@ library
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
   exposed-modules:      HaskellWorks.CabalCache.AppError
-                        HaskellWorks.CabalCache.AWS.Env
+                        HaskellWorks.CabalCache.Aws.Env
                         HaskellWorks.CabalCache.Concurrent.DownloadQueue
                         HaskellWorks.CabalCache.Concurrent.Fork
                         HaskellWorks.CabalCache.Concurrent.Type

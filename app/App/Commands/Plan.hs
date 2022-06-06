@@ -1,5 +1,6 @@
 {-# LANGUAGE BlockArguments      #-}
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE OverloadedLabels    #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TypeApplications    #-}
@@ -10,16 +11,17 @@ module App.Commands.Plan
 
 import Antiope.Core                     (toText)
 import App.Commands.Options.Types       (PlanOptions (PlanOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
+import Control.Applicative              (optional)
+import Control.Lens                     ((<&>), (&), (^.), (%~), Each(each))
+import Control.Monad.Except             (when, forM)
+import Data.Generics.Labels             ()
 import Data.Generics.Product.Any        (the)
-import Data.Maybe
-import HaskellWorks.CabalCache.AppError
+import Data.Maybe                       (fromMaybe)
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Options.Applicative              hiding (columns)
+import Options.Applicative              (CommandFields, Mod, Parser)
 
 import qualified App.Commands.Options.Types         as Z
 import qualified App.Static                         as AS
@@ -30,6 +32,7 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
@@ -38,7 +41,7 @@ import qualified System.IO                          as IO
 
 runPlan :: Z.PlanOptions -> IO ()
 runPlan opts = do
-  let storePath             = opts ^. the @"storePath"
+  let storePath             = opts ^. #storePath
   let archiveUris           = [Local ""]
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
@@ -77,31 +80,31 @@ runPlan opts = do
 
 optsPlan :: Parser PlanOptions
 optsPlan = PlanOptions
-  <$> strOption
-      (   long "build-path"
-      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
-      <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+  <$> OA.strOption
+      (   OA.long "build-path"
+      <>  OA.help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.buildPath
       )
-  <*> strOption
-      (   long "store-path"
-      <>  help "Path to cabal store"
-      <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+  <*> OA.strOption
+      (   OA.long "store-path"
+      <>  OA.help "Path to cabal store"
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value (AS.cabalDirectory </> "store")
       )
   <*> optional
-      ( strOption
-        (   long "store-path-hash"
-        <>  help "Store path hash (do not use)"
-        <>  metavar "HASH"
+      ( OA.strOption
+        (   OA.long "store-path-hash"
+        <>  OA.help "Store path hash (do not use)"
+        <>  OA.metavar "HASH"
         )
       )
-  <*> strOption
-      (   long "output-file"
-      <>  help "Output file"
-      <>  metavar "FILE"
-      <>  value "-"
+  <*> OA.strOption
+      (   OA.long "output-file"
+      <>  OA.help "Output file"
+      <>  OA.metavar "FILE"
+      <>  OA.value "-"
       )
 
 cmdPlan :: Mod CommandFields (IO ())
-cmdPlan = command "plan"  $ flip info idm $ runPlan <$> optsPlan
+cmdPlan = OA.command "plan"  $ flip OA.info OA.idm $ runPlan <$> optsPlan

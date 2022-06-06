@@ -1,6 +1,6 @@
 module HaskellWorks.CabalCache.Concurrent.Fork where
 
-import Control.Monad
+import Control.Monad (when, forM_)
 
 import qualified Control.Concurrent     as IO
 import qualified Control.Concurrent.STM as STM

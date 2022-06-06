@@ -1,10 +1,12 @@
 module Main where
 
-import App.Commands
-import Control.Monad
-import Options.Applicative
+import App.Commands (commands)
+import Control.Monad (join)
+import Options.Applicative ((<**>))
+
+import qualified Options.Applicative as OA
 
 main :: IO ()
-main = join $ customExecParser
-  (prefs $ showHelpOnEmpty <> showHelpOnError)
-  (info (commands <**> helper) idm)
+main = join $ OA.customExecParser
+  (OA.prefs $ OA.showHelpOnEmpty <> OA.showHelpOnError)
+  (OA.info (commands <**> OA.helper) OA.idm)

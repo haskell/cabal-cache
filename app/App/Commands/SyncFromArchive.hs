@@ -10,27 +10,28 @@ module App.Commands.SyncFromArchive
 
 import Antiope.Core                     (Region (..), runResAws, toText)
 import Antiope.Env                      (mkEnv)
-import Antiope.Options.Applicative
+import Antiope.Options.Applicative      (autoText)
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
-import Control.Applicative
-import Control.Lens                     hiding ((<.>))
-import Control.Monad.Except
+import Control.Applicative              (Alternative(..))
+import Control.Lens                     ((<&>), (&), (^..), (^.), (%~), (.~), Each(each))
+import Control.Monad                    (void, when, unless, forM_)
+import Control.Monad.Except             (MonadError(..), MonadIO(..), ExceptT(..), MonadTrans(lift), runExceptT)
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint, AWST', Env)
 import Control.Monad.Trans.Resource     (ResourceT)
 import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
 import Data.Generics.Product.Any        (the)
-import Data.Maybe
-import Data.Monoid
-import HaskellWorks.CabalCache.AppError
+import Data.Maybe                       (fromMaybe)
+import Data.Monoid                      (Dual(Dual), Endo(Endo))
+import HaskellWorks.CabalCache.AppError (displayAppError, AppError)
 import HaskellWorks.CabalCache.IO.Error (exceptWarn, maybeToExcept)
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Types    (PackageId)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
-import Options.Applicative              hiding (columns)
+import Options.Applicative              (Mod, Parser, CommandFields)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
 
 import qualified App.Commands.Options.Types                       as Z
@@ -42,7 +43,7 @@ import qualified Data.List                                        as L
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
 import qualified Data.Text                                        as T
-import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
+import qualified HaskellWorks.CabalCache.Aws.Env                  as AWS
 import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
 import qualified HaskellWorks.CabalCache.Concurrent.Fork          as IO
 import qualified HaskellWorks.CabalCache.Core                     as Z
@@ -53,6 +54,7 @@ import qualified HaskellWorks.CabalCache.IO.Console               as CIO
 import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
 import qualified HaskellWorks.CabalCache.Types                    as Z
+import qualified Options.Applicative                              as OA
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
 import qualified System.IO.Temp                                   as IO
@@ -211,71 +213,71 @@ onError h failureValue f = do
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
-  <$> option (auto <|> text)
-      (  long "region"
-      <> metavar "AWS_REGION"
-      <> showDefault <> value Oregon
-      <> help "The AWS region in which to operate"
+  <$> OA.option (OA.auto <|> text)
+      (  OA.long "region"
+      <> OA.metavar "AWS_REGION"
+      <> OA.showDefault <> OA.value Oregon
+      <> OA.help "The AWS region in which to operate"
       )
   <*> some
-      (  option (maybeReader (toLocation . T.pack))
-        (   long "archive-uri"
-        <>  help "Archive URI to sync to"
-        <>  metavar "S3_URI"
+      (  OA.option (OA.maybeReader (toLocation . T.pack))
+        (   OA.long "archive-uri"
+        <>  OA.help "Archive URI to sync to"
+        <>  OA.metavar "S3_URI"
         )
       )
-  <*> strOption
-      (   long "build-path"
-      <>  help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
-      <>  metavar "DIRECTORY"
-      <>  value AS.buildPath
+  <*> OA.strOption
+      (   OA.long "build-path"
+      <>  OA.help ("Path to cabal build directory.  Defaults to " <> show AS.buildPath)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value AS.buildPath
       )
-  <*> strOption
-      (   long "store-path"
-      <>  help ("Path to cabal store.  Defaults to " <> show AS.cabalDirectory)
-      <>  metavar "DIRECTORY"
-      <>  value (AS.cabalDirectory </> "store")
+  <*> OA.strOption
+      (   OA.long "store-path"
+      <>  OA.help ("Path to cabal store.  Defaults to " <> show AS.cabalDirectory)
+      <>  OA.metavar "DIRECTORY"
+      <>  OA.value (AS.cabalDirectory </> "store")
       )
-  <*> optional
-      ( strOption
-        (   long "store-path-hash"
-        <>  help "Store path hash (do not use)"
-        <>  metavar "HASH"
+  <*> OA.optional
+      ( OA.strOption
+        (   OA.long "store-path-hash"
+        <>  OA.help "Store path hash (do not use)"
+        <>  OA.metavar "HASH"
         )
       )
-  <*> option auto
-      (   long "threads"
-      <>  help "Number of concurrent threads"
-      <>  metavar "NUM_THREADS"
-      <>  value 4
+  <*> OA.option OA.auto
+      (   OA.long "threads"
+      <>  OA.help "Number of concurrent threads"
+      <>  OA.metavar "NUM_THREADS"
+      <>  OA.value 4
       )
-  <*> optional
-      ( option autoText
-        (   long "aws-log-level"
-        <>  help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
-        <>  metavar "AWS_LOG_LEVEL"
+  <*> OA.optional
+      ( OA.option autoText
+        (   OA.long "aws-log-level"
+        <>  OA.help "AWS Log Level.  One of (Error, Info, Debug, Trace)"
+        <>  OA.metavar "AWS_LOG_LEVEL"
         )
       )
-  <*> optional parseEndpoint
+  <*> OA.optional parseEndpoint
 
 parseEndpoint :: Parser (ByteString, Int, Bool)
 parseEndpoint =
   (,,)
-  <$>  option autoText
-        (   long "host-name-override"
-        <>  help "Override the host name (default: s3.amazonaws.com)"
-        <>  metavar "HOST_NAME"
+  <$> OA.option autoText
+        (   OA.long "host-name-override"
+        <>  OA.help "Override the host name (default: s3.amazonaws.com)"
+        <>  OA.metavar "HOST_NAME"
         )
-  <*> option auto
-        (   long "host-port-override"
-        <>  help "Override the host port"
-        <>  metavar "HOST_PORT"
+  <*> OA.option OA.auto
+        (   OA.long "host-port-override"
+        <>  OA.help "Override the host port"
+        <>  OA.metavar "HOST_PORT"
         )
-  <*> option auto
-        (   long "host-ssl-override"
-        <>  help "Override the host SSL"
-        <>  metavar "HOST_SSL"
+  <*> OA.option OA.auto
+        (   OA.long "host-ssl-override"
+        <>  OA.help "Override the host SSL"
+        <>  OA.metavar "HOST_SSL"
         )
 
 cmdSyncFromArchive :: Mod CommandFields (IO ())
-cmdSyncFromArchive = command "sync-from-archive"  $ flip info idm $ runSyncFromArchive <$> optsSyncFromArchive
+cmdSyncFromArchive = OA.command "sync-from-archive"  $ flip OA.info OA.idm $ runSyncFromArchive <$> optsSyncFromArchive

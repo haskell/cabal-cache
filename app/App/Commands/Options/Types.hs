@@ -4,9 +4,9 @@
 module App.Commands.Options.Types where
 
 import Antiope.Env                      (Region)
-import GHC.Generics
+import GHC.Generics                     (Generic)
 import Data.ByteString                  (ByteString)
-import HaskellWorks.CabalCache.Location
+import HaskellWorks.CabalCache.Location (Location)
 
 import qualified Antiope.Env as AWS
 

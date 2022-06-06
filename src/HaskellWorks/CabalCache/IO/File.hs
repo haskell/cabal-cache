@@ -5,7 +5,7 @@ module HaskellWorks.CabalCache.IO.File
   , listMaybeDirectory
   ) where
 
-import Control.Monad.Except
+import Control.Monad.Except (MonadError(throwError), MonadIO(..), ExceptT)
 
 import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO

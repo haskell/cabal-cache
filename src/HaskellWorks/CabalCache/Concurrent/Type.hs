@@ -8,7 +8,7 @@ module HaskellWorks.CabalCache.Concurrent.Type
   , PackageId
   ) where
 
-import GHC.Generics
+import GHC.Generics (Generic)
 import HaskellWorks.CabalCache.Types (PackageId)
 
 import qualified Control.Concurrent.STM as STM

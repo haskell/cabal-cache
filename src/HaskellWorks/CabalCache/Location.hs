@@ -15,12 +15,12 @@ where
 
 import Antiope.Core                 (ToText (..))
 import Antiope.S3                   (ObjectKey (..), S3Uri (..))
-import Control.Lens                 hiding ((<.>))
-import Data.Generics.Product.Any
+import Control.Lens                 ((&), (%~))
+import Data.Generics.Product.Any    (HasAny(the))
 import Data.Maybe                   (fromMaybe)
 import Data.Text                    (Text)
 import GHC.Generics                 (Generic)
-import HaskellWorks.CabalCache.Show
+import HaskellWorks.CabalCache.Show (tshow)
 import Network.URI                  (URI)
 
 import qualified Data.Text       as T

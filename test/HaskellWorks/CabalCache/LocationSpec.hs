@@ -5,21 +5,21 @@ module HaskellWorks.CabalCache.LocationSpec
 ) where
 
 import Antiope.Core                     (toText)
-import HaskellWorks.CabalCache.Location
+import Data.Maybe                       (fromJust)
+import HaskellWorks.CabalCache.Location (toLocation, IsPath((<.>), (</>)), Location(Local, Uri))
+import Hedgehog                         ((===), MonadGen, forAll)
+import Network.URI                      (URI)
+import Test.Hspec                       (Spec, describe, it)
 
-import Data.Maybe                  (fromJust)
-import HaskellWorks.Hspec.Hedgehog
-import Hedgehog
-import Network.URI                 (URI)
-import Test.Hspec
-
-import qualified Data.List       as L
-import qualified Data.List       as List
-import qualified Data.Text       as Text
-import qualified Hedgehog.Gen    as Gen
-import qualified Hedgehog.Range  as Range
-import qualified Network.URI     as URI
-import qualified System.FilePath as FP
+import qualified Data.List                    as L
+import qualified Data.List                    as List
+import qualified Data.Text                    as Text
+import qualified HaskellWorks.Hspec.Hedgehog  as H
+import qualified Hedgehog                     as H
+import qualified Hedgehog.Gen                 as Gen
+import qualified Hedgehog.Range               as Range
+import qualified Network.URI                  as URI
+import qualified System.FilePath              as FP
 
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
@@ -41,27 +41,27 @@ localPath = do
 
 spec :: Spec
 spec = describe "HaskellWorks.Assist.LocationSpec" $ do
-  it "URI bucket-only" $ requireTest $ do
+  it "URI bucket-only" $ H.requireTest $ do
     fromJust (URI.parseURI "s3://bucket") </> "directory" === fromJust (URI.parseURI "s3://bucket/directory")
 
-  it "Location bucket-only" $ requireTest $ do
+  it "Location bucket-only" $ H.requireTest $ do
     fromJust (toLocation "s3://bucket") </> "directory" === fromJust (toLocation "s3://bucket/directory")
 
-  it "S3 should roundtrip from and to text" $ require $ property $ do
+  it "S3 should roundtrip from and to text" $ H.requireProperty $ do
     uri <- forAll s3Uri
-    tripping (Uri uri) toText toLocation
+    H.tripping (Uri uri) toText toLocation
 
-  it "LocalLocation should roundtrip from and to text" $ require $ property $ do
+  it "LocalLocation should roundtrip from and to text" $ H.requireProperty $ do
     path <- forAll localPath
-    tripping (Local path) toText toLocation
+    H.tripping (Local path) toText toLocation
 
-  it "Should append s3 path" $ require $ property $ do
+  it "Should append s3 path" $ H.requireProperty $ do
     loc  <- Uri <$> forAll s3Uri
     part <- forAll $ Gen.text (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.text (Range.linear 2 4)  Gen.alphaNum
     toText (loc </> part <.> ext) === toText loc <> "/" <> part <> "." <> ext
 
-  it "Should append s3 path" $ require $ property $ do
+  it "Should append s3 path" $ H.requireProperty $ do
     loc  <- Local <$> forAll localPath
     part <- forAll $ Gen.string (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.string (Range.linear 2 4)  Gen.alphaNum

@@ -3,8 +3,8 @@
 
 module HaskellWorks.CabalCache.GhcPkg where
 
-import Control.Lens
-import Data.Generics.Product.Any
+import Control.Lens              ((^.))
+import Data.Generics.Product.Any (HasAny(the))
 import System.Exit               (ExitCode (..), exitWith)
 import System.Process            (waitForProcess)
 
