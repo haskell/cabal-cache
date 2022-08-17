@@ -42,9 +42,12 @@ import qualified Data.List                                        as L
 import qualified Data.Map                                         as M
 import qualified Data.Map.Strict                                  as Map
 import qualified Data.Text                                        as T
+import qualified Data.Text.Encoding                               as T
+import qualified Data.Yaml                                        as Y
 import qualified HaskellWorks.CabalCache.AWS.Env                  as AWS
 import qualified HaskellWorks.CabalCache.Concurrent.DownloadQueue as DQ
 import qualified HaskellWorks.CabalCache.Concurrent.Fork          as IO
+import qualified HaskellWorks.CabalCache.Config                   as CONFIG
 import qualified HaskellWorks.CabalCache.Core                     as Z
 import qualified HaskellWorks.CabalCache.Data.List                as L
 import qualified HaskellWorks.CabalCache.GhcPkg                   as GhcPkg
@@ -52,6 +55,7 @@ import qualified HaskellWorks.CabalCache.Hash                     as H
 import qualified HaskellWorks.CabalCache.IO.Console               as CIO
 import qualified HaskellWorks.CabalCache.IO.Lazy                  as IO
 import qualified HaskellWorks.CabalCache.IO.Tar                   as IO
+import qualified HaskellWorks.CabalCache.Text                     as T
 import qualified HaskellWorks.CabalCache.Types                    as Z
 import qualified System.Directory                                 as IO
 import qualified System.IO                                        as IO
@@ -75,6 +79,11 @@ runSyncFromArchive opts = do
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
   let storePathHash         = opts ^. the @"storePathHash" & fromMaybe (H.hashStorePath storePath)
   let scopedArchiveUris     = versionedArchiveUris & each %~ (</> T.pack storePathHash)
+
+  cabalCacheConfig <- CONFIG.loadConfigFile CONFIG.defaultConfigFile
+
+  CIO.putStrLn "Using config:"
+  CIO.putStrLn $ T.indentLines $ T.decodeUtf8 (Y.encode cabalCacheConfig)
 
   CIO.putStrLn $ "Store path: "       <> toText storePath
   CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
