@@ -153,7 +153,11 @@ runSyncToArchive opts = do
                           <> tshow (fmap toText [scopedArchiveFile, archiveFile])
                           <> " " <> displayAppError e
 
-                      _ -> return ()
+                      e -> do
+                        CIO.hPutStrLn IO.stderr $ mempty
+                          <> "ERROR: Unexpected error: "
+                          <> tshow (fmap toText [scopedArchiveFile, archiveFile])
+                          <> " " <> displayAppError e
         Left msg -> CIO.hPutStrLn IO.stderr msg
 
     Left (appError :: AppError) -> do
