@@ -5,7 +5,7 @@
       "label": "Build",
       "type": "shell",
       "command": "bash",
-      "args": ["-lc", "./project.sh build && echo 'Done'"],
+      "args": ["-lc", "cabal build all --enable-tests && echo 'Done'"],
       "group": {
         "kind": "build",
         "isDefault": true
