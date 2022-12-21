@@ -14,6 +14,7 @@ import Control.Monad.Catch          (MonadMask(..))
 import Control.Monad.IO.Class       (MonadIO(..))
 import Data.Function                ((&))
 import Data.Set                     ((\\))
+import GHC.IO.Exception             (IOException)
 import HaskellWorks.CabalCache.Show (tshow)
 
 import qualified Control.Concurrent.STM                  as STM
@@ -82,7 +83,10 @@ runQueue downloadQueue f = do
     Just packageId -> do
       downloadStatus <- f packageId
         & do CMC.handle @_ @AWS.Error \e -> do
-              liftIO $ CIO.hPutStrLn IO.stderr $ "Failed download due to exception: " <> tshow e
+              liftIO $ CIO.hPutStrLn IO.stderr $ "Failed download due to AWS Error: " <> tshow e
+              pure DownloadFailure
+        & do CMC.handle @_ @IOException \e -> do
+              liftIO $ CIO.hPutStrLn IO.stderr $ "Failed download due to IO Exception: " <> tshow e
               pure DownloadFailure
         & do CMC.handleAll \e -> do
               liftIO $ CIO.hPutStrLn IO.stderr $ "Aborting due to unexpected exception during download: " <> tshow e
