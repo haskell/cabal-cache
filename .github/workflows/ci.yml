@@ -20,7 +20,10 @@ jobs:
       fail-fast: false
       matrix:
         ghc: ["8.10.7", "8.8.4", "8.6.5"]
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest]
+        include:
+          - ghc: "8.10.7"
+          - os: macOS-latest
 
     steps:
       - uses: actions/checkout@v2
