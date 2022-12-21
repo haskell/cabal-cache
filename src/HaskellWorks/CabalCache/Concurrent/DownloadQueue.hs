@@ -2,6 +2,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecordWildCards   #-}
+{-# LANGUAGE TypeApplications  #-}
 
 module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ( DownloadStatus(..)
@@ -9,16 +10,19 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   , runQueue
   ) where
 
-import Control.Monad.Catch    (MonadMask(..))
-import Control.Monad.IO.Class (MonadIO(..))
-import Data.Function          ((&))
-import Data.Set               ((\\))
+import Control.Monad.Catch          (MonadMask(..))
+import Control.Monad.IO.Class       (MonadIO(..))
+import Data.Function                ((&))
+import Data.Set                     ((\\))
+import HaskellWorks.CabalCache.Show (tshow)
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Control.Monad.Catch                     as CMC
 import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
+import qualified HaskellWorks.CabalCache.IO.Console      as CIO
+import qualified Network.AWS                             as AWS
 import qualified System.IO                               as IO
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
@@ -69,10 +73,13 @@ runQueue downloadQueue f = do
   case maybePackageId of
     Just packageId -> do
       downloadStatus <- f packageId
-        & CMC.handleAll \e -> do
-            liftIO $ IO.hPutStrLn IO.stderr $ "Exception during download: " <> show e
-            liftIO $ IO.hFlush IO.stderr
-            CMC.throwM e
+        & do CMC.handle @_ @AWS.Error \e -> do
+              liftIO $ CIO.hPutStrLn IO.stderr $ "Failed download due to exception: " <> tshow e
+              pure DownloadFailure
+        & do CMC.handleAll \e -> do
+              liftIO $ CIO.hPutStrLn IO.stderr $ "Aborting due to unexpected exception during download: " <> tshow e
+              liftIO $ STM.atomically $ failDownload downloadQueue packageId
+              CMC.throwM e
       case downloadStatus of
         DownloadSuccess -> do liftIO $ STM.atomically $ commit downloadQueue packageId
         DownloadFailure -> do liftIO $ STM.atomically $ failDownload downloadQueue packageId
