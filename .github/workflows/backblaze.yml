@@ -21,6 +21,7 @@ jobs:
       matrix:
         ghc: ["8.10.7"]
         os: [ubuntu-latest]
+        n: ["00", "01", "02", "03", "04", "05", "06", "07", "08", "09", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19"]
 
     steps:
       - uses: actions/checkout@v2
@@ -69,7 +70,3 @@ jobs:
         run: |
           cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ || \
           cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ -j1
-
-      - name: Test
-        run: |
-          cabal test all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
