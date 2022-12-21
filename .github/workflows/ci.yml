@@ -34,13 +34,6 @@ jobs:
           ghc-version: ${{ matrix.ghc }}
           cabal-version: 3.8.1.0
 
-      - uses: actions/cache@v2
-        name: Cache cabal store
-        with:
-          path: dist-newstyle
-          key: cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-${{ github.sha }}
-          restore-keys: cache-${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal-cache.cabal') }}-
-
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
         run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
