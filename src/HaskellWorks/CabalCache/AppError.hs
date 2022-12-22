@@ -7,6 +7,7 @@ module HaskellWorks.CabalCache.AppError
   , appErrorStatus
   ) where
 
+import Control.Exception
 import Data.String
 import Data.Text                    (Text)
 import GHC.Generics
@@ -29,6 +30,9 @@ data AppError
 
 instance IsString AppError where
   fromString = GenericAppError . T.pack
+
+instance Exception AppError where
+  displayException = T.unpack . displayAppError
 
 displayAppError :: AppError -> Text
 displayAppError (AwsAppError s)       = tshow s

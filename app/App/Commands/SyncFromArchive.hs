@@ -14,6 +14,7 @@ import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
 import Control.Applicative
+import Control.Exception                (throwIO)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Except
 import Control.Monad.Trans.AWS          (envOverride, setEndpoint, AWST', Env)
@@ -94,10 +95,11 @@ runSyncFromArchive opts = do
         Right compilerContext -> do
           GhcPkg.testAvailability compilerContext
 
-          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-            Nothing -> s))
-            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          envAws <- (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+                Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+                Nothing -> s))
+                $ IO.unsafeInterleaveIO $ either throwIO pure =<<
+                  (runExceptT $ IO.retryS3 $ ExceptT $ IO.handleErrors $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel))
           let compilerId                  = planJson ^. the @"compilerId"
           let storeCompilerPath           = storePath </> T.unpack compilerId
           let storeCompilerPackageDbPath  = storeCompilerPath </> "package.db"

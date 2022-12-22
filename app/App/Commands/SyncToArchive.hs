@@ -15,6 +15,7 @@ import Antiope.Options.Applicative
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
 import Control.Applicative
+import Control.Exception                (throwIO)
 import Control.Lens                     hiding ((<.>))
 import Control.Monad.Except
 import Control.Monad.Trans.Resource     (runResourceT)
@@ -90,10 +91,11 @@ runSyncToArchive opts = do
       case compilerContextResult of
         Right compilerContext -> do
           let compilerId = planJson ^. the @"compilerId"
-          envAws <- IO.unsafeInterleaveIO $ (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
-            Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
-            Nothing -> s))
-            $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)
+          envAws <- (<&> envOverride .~ Dual (Endo $ \s -> case hostEndpoint of
+                Just (hostname, port, ssl) -> setEndpoint ssl hostname port s
+                Nothing -> s))
+                $ IO.unsafeInterleaveIO $ either throwIO pure =<<
+                  (runExceptT $ IO.retryS3 $ ExceptT $ IO.handleErrors $ mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel))
           let archivePath       = versionedArchiveUri </> compilerId
           let scopedArchivePath = scopedArchiveUri </> compilerId
           IO.createLocalDirectoryIfMissing archivePath

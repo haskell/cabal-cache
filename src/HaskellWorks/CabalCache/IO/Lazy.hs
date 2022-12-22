@@ -15,6 +15,8 @@ module HaskellWorks.CabalCache.IO.Lazy
   , linkOrCopyResource
   , readHttpUri
   , removePathRecursive
+  , handleErrors
+  , retryS3
   ) where
 
 import Antiope.Core
@@ -55,25 +57,28 @@ import Data.Maybe (fromMaybe)
 {- HLINT ignore "Reduce duplication"  -}
 {- HLINT ignore "Redundant bracket"   -}
 
-handleAwsError :: MonadCatch m => m a -> m (Either AppError a)
-handleAwsError f = catch (Right <$> f) $ \(e :: AWS.Error) ->
-  case e of
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 404 _) _ _ _ _)) -> return (Left (AwsAppError s))
-    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status 301 _) _ _ _ _)) -> return (Left (AwsAppError s))
-    _                                                                      -> throwM e
 
-handleHttpError :: (MonadCatch m, MonadIO m) => m a -> ExceptT AppError m a
-handleHttpError f = catch (lift f) $ \(e :: HTTP.HttpException) ->
-  case e of
+handleErrors :: MonadCatch m => m a -> m (Either AppError a)
+handleErrors f = catches (Right <$> f) [ Handler (\(e :: AWS.Error) -> awsHandler e)
+                                       , Handler (\(e :: HTTP.HttpException) -> httpHandler e)
+                                       ]
+ where
+  httpHandler e = case e of
     (HTTP.HttpExceptionRequest _ e') -> case e' of
-      HTTP.StatusCodeException resp _ -> throwE (HttpAppError (resp & HTTP.responseStatus))
-      _                               -> throwE (GenericAppError (tshow e'))
-    _                                 -> liftIO $ throwM e
+      HTTP.StatusCodeException resp _ -> return (Left (HttpAppError (resp & HTTP.responseStatus)))
+      _                               -> return (Left (GenericAppError (tshow e)))
+    _                               -> return (Left (GenericAppError (tshow e)))
+  awsHandler e = case e of
+    (AWS.ServiceError (AWS.ServiceError' _ s@(HTTP.Status si _) _ _ _ _))
+      | si >= 300
+      , si < 600 -> return (Left (AwsAppError s))
+    _ -> return (Left (GenericAppError (tshow e)))
+
 
 getS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> URI -> ExceptT AppError m LBS.ByteString
 getS3Uri envAws uri = do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
-  ExceptT . handleAwsError $ runAws envAws $ AWS.unsafeDownload b k
+  ExceptT . handleErrors $ runAws envAws $ AWS.unsafeDownload b k
 
 uriToS3Uri :: URI -> Either AppError S3Uri
 uriToS3Uri uri = case fromText @S3Uri (tshow uri) of
@@ -139,14 +144,14 @@ firstExistingResource envAws (a:as) = do
 headS3Uri :: (MonadResource m, MonadCatch m) => AWS.Env -> URI -> m (Either AppError AWS.HeadObjectResponse)
 headS3Uri envAws uri = runExceptT $ do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
-  ExceptT . handleAwsError $ runAws envAws $ AWS.send $ AWS.headObject b k
+  ExceptT . handleErrors $ runAws envAws $ AWS.send $ AWS.headObject b k
 
 uploadToS3 :: (MonadUnliftIO m, MonadCatch m) => AWS.Env -> URI -> LBS.ByteString -> ExceptT AppError m ()
 uploadToS3 envAws uri lbs = do
   AWS.S3Uri b k <- except $ uriToS3Uri (reslashUri uri)
   let req = AWS.toBody lbs
   let po  = AWS.putObject b k req
-  ExceptT . handleAwsError $ void $ runResAws envAws $ AWS.send po
+  ExceptT . handleErrors $ void $ runResAws envAws $ AWS.send po
 
 reslashUri :: URI -> URI
 reslashUri uri = uri & the @"uriPath" %~ fmap reslashChar
@@ -176,7 +181,7 @@ copyS3Uri envAws source target = do
   AWS.S3Uri targetBucket targetObjectKey <- except $ uriToS3Uri (reslashUri target)
   ExceptT $ do
     responseResult <- runResourceT $
-      handleAwsError $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
+      handleErrors $ runAws envAws $ AWS.send (AWS.copyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey)
     case responseResult of
       Right response -> do
         let responseCode = response ^. AWS.corsResponseStatus
@@ -232,7 +237,7 @@ linkOrCopyResource envAws source target = case source of
       (sourceScheme, targetScheme) -> throwError $ GenericAppError $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
 readHttpUri :: (MonadIO m, MonadCatch m) => URI -> ExceptT AppError m LBS.ByteString
-readHttpUri httpUri = handleHttpError $ do
+readHttpUri httpUri = ExceptT $ handleErrors $ do
   manager <- liftIO $ HTTP.newManager HTTPS.tlsManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (reslashUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
@@ -240,7 +245,7 @@ readHttpUri httpUri = handleHttpError $ do
   return $ HTTP.responseBody response
 
 headHttpUri :: (MonadIO m, MonadCatch m) => URI -> ExceptT AppError m LBS.ByteString
-headHttpUri httpUri = handleHttpError $ do
+headHttpUri httpUri = ExceptT $ handleErrors $ do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> tshow (reslashUri httpUri)))
   response <- liftIO $ HTTP.httpLbs request manager
