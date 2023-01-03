@@ -1,11 +1,16 @@
 {-# LANGUAGE DataKinds           #-}
+{-# LANGUAGE FlexibleContexts    #-}
+{-# LANGUAGE GADTs               #-}
 {-# LANGUAGE OverloadedStrings   #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections       #-}
 {-# LANGUAGE TypeApplications    #-}
 
 module App.Commands.SyncFromArchive
-  ( cmdSyncFromArchive
+  ( cmdSyncFromArchive,
+
+    -- TODO use these functions
+    onError_,
   ) where
 
 import Antiope.Core                     (Region (..), runResAws, toText)
@@ -35,6 +40,7 @@ import System.Directory                 (createDirectoryIfMissing, doesDirectory
 
 import qualified App.Commands.Options.Types                       as Z
 import qualified App.Static                                       as AS
+import qualified Control.Carrier.Error.Either                     as FE
 import qualified Control.Concurrent.STM                           as STM
 import qualified Data.ByteString.Char8                            as C8
 import qualified Data.ByteString.Lazy                             as LBS
@@ -208,8 +214,18 @@ onError h failureValue f = do
   case result of
     Left _  -> return failureValue
     Right a -> return a
-  where handler :: AppError -> ExceptT AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
-        handler e = lift (h e) >> return failureValue
+  where handler e = lift (h e) >> return failureValue
+
+onError_ :: ()
+  => (AppError -> AWST' Env (ResourceT IO) ())
+  -> DQ.DownloadStatus
+  -> FE.ErrorC AppError (AWST' Env (ResourceT IO)) DQ.DownloadStatus
+  -> AWST' Env (ResourceT IO) DQ.DownloadStatus
+onError_ h failureValue f = do
+  result <- FE.runError f
+  case result of
+    Left e  -> h e >> return failureValue
+    Right a -> return a
 
 optsSyncFromArchive :: Parser SyncFromArchiveOptions
 optsSyncFromArchive = SyncFromArchiveOptions
