@@ -226,6 +226,14 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
 
             DQ.succeed
 
+    CIO.putStrLn "Recaching package database"
+
+    liftIO $ GhcPkg.recache compilerContext storeCompilerPackageDbPath
+
+    failures <- liftIO $ STM.atomically $ STM.readTVar $ downloadQueue ^. the @"tFailures"
+
+    forM_ failures $ \packageId -> CIO.hPutStrLn IO.stderr $ "Failed to download: " <> packageId
+
 ensureStorePathCleanup :: ()
   => MonadIO m
   => MonadCatch m
