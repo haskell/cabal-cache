@@ -14,9 +14,9 @@ import Control.Monad                    (forM)
 import Control.Monad.IO.Class           (MonadIO(liftIO))
 import Data.Generics.Product.Any        (the)
 import Data.Maybe                       (fromMaybe)
+import Data.Text                        (Text)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..))
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
-import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              (Parser, Mod, CommandFields)
 
@@ -29,8 +29,10 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.Core       as Z
 import qualified HaskellWorks.CabalCache.Hash       as H
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.Pretty     as PP
 import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
+import qualified Prettyprinter                      as PP
 import qualified System.IO                          as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
@@ -45,14 +47,14 @@ runPlan opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
   let versionedArchiveUris  = archiveUris & each %~ (</> archiveVersion)
   let outputFile            = opts ^. the @"outputFile"
 
-  CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
-  CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-  CIO.putStrLn $ "Archive URIs: "     <> tshow archiveUris
-  CIO.putStrLn $ "Archive version: "  <> archiveVersion
+  CIO.putLn $ "Store path: "       <> PP.text storePath
+  CIO.putLn $ "Store path hash: "  <> PP.text storePathHash
+  CIO.putLn $ "Archive URIs: "     <> PP.show archiveUris
+  CIO.putLn $ "Archive version: "  <> PP.pretty @Text archiveVersion
 
   planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
     & do OO.catch @DecodeError \e -> do
-          CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
+          CIO.hPutLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> PP.show e
           OO.throw ExitFailure
 
   packages <- liftIO $ Z.getPackages storePath planJson

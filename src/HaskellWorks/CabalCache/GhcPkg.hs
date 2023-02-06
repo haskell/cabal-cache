@@ -15,9 +15,11 @@ import Data.Generics.Product.Any (HasAny(the))
 import System.Exit               (ExitCode (..), exitWith)
 import System.Process            (waitForProcess)
 
-import qualified HaskellWorks.CabalCache.Types as Z
-import qualified System.IO                     as IO
-import qualified System.Process                as IO
+import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.Types      as Z
+import qualified Prettyprinter                      as PP
+import qualified System.IO                          as IO
+import qualified System.Process                     as IO
 
 system :: [String] -> IO IO.ProcessHandle
 system (cmd:args) = IO.spawnProcess cmd args
@@ -29,7 +31,7 @@ runGhcPkg cc params = do
   exitCodeGhcPkg2 <- waitForProcess hGhcPkg2
   case exitCodeGhcPkg2 of
     ExitFailure _ -> do
-      IO.hPutStrLn IO.stderr "ERROR: Unable to recache package db"
+      CIO.hPutLn IO.stderr $ PP.pretty "ERROR: Unable to recache package db"
       exitWith (ExitFailure 1)
     _ -> return ()
 

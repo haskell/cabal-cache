@@ -31,6 +31,7 @@ import qualified Data.ByteString.Lazy                 as LBS
 import qualified HaskellWorks.CabalCache.IO.Console   as CIO
 import qualified HaskellWorks.CabalCache.AWS.Error    as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3.URI   as AWS
+import qualified HaskellWorks.CabalCache.Pretty       as PP
 import qualified HaskellWorks.CabalCache.URI          as URI
 import qualified Network.AWS                          as AWS
 import qualified Network.AWS.Data.Body                as AWS
@@ -121,5 +122,5 @@ copyS3Uri envAws source target = do
   response <- OO.suspend runResourceT (AWS.runAWS envAws $ AWS.send copyObjectRequest)
   let responseCode = response ^. AWS.corsResponseStatus
   unless (200 <= responseCode && responseCode < 300) do
-    liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
+    liftIO $ CIO.hPutLn IO.stderr $ "Error in S3 copy: " <> PP.show response
     OO.throw CopyFailed

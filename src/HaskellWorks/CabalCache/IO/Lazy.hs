@@ -41,6 +41,7 @@ import qualified Data.Text                            as T
 import qualified HaskellWorks.CabalCache.AWS.S3       as S3
 import qualified HaskellWorks.CabalCache.IO.Console   as CIO
 import qualified HaskellWorks.CabalCache.URI          as URI
+import qualified HaskellWorks.CabalCache.Pretty       as PP
 import qualified Network.HTTP.Client                  as HTTP
 import qualified Network.HTTP.Client.TLS              as HTTPS
 import qualified System.Directory                     as IO
@@ -209,7 +210,7 @@ retryWhen p n f = f
           then do
             if p exception
               then do
-                liftIO $ CIO.hPutStrLn IO.stderr $ "WARNING: " <> tshow exception <> " (retrying)"
+                liftIO $ CIO.hPutLn IO.stderr $ "WARNING: " <> PP.show exception <> " (retrying)"
                 liftIO $ IO.threadDelay 1000000
                 retryWhen p (n - 1) f
               else OO.throw exception
