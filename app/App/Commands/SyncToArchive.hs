@@ -21,12 +21,11 @@ import Data.List                        ((\\))
 import Data.Maybe                       (fromMaybe)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
 import Data.Text                        (Text)
-import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
+import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..))
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
 import HaskellWorks.CabalCache.Metadata (createMetadata)
-import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
 import Options.Applicative              (Parser, Mod, CommandFields)
@@ -50,9 +49,11 @@ import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified HaskellWorks.CabalCache.IO.File    as IO
 import qualified HaskellWorks.CabalCache.IO.Lazy    as IO
 import qualified HaskellWorks.CabalCache.IO.Tar     as IO
+import qualified HaskellWorks.CabalCache.Pretty     as PP
 import qualified Network.AWS                        as AWS
 import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
+import qualified Prettyprinter                      as PP
 import qualified System.Directory                   as IO
 import qualified System.IO                          as IO
 import qualified System.IO.Temp                     as IO
@@ -82,21 +83,21 @@ runSyncToArchive opts = do
     let maxRetries          = opts ^. the @"maxRetries"
     let ignorePackages      = opts ^. the @"ignorePackages"
 
-    CIO.putStrLn $ "Store path: "       <> AWS.toText storePath
-    CIO.putStrLn $ "Store path hash: "  <> T.pack storePathHash
-    CIO.putStrLn $ "Archive URI: "      <> AWS.toText archiveUri
-    CIO.putStrLn $ "Archive version: "  <> archiveVersion
-    CIO.putStrLn $ "Threads: "          <> tshow threads
-    CIO.putStrLn $ "AWS Log level: "    <> tshow awsLogLevel
+    CIO.putLn $ "Store path: "       <> PP.text storePath
+    CIO.putLn $ "Store path hash: "  <> PP.text storePathHash
+    CIO.putLn $ "Archive URI: "      <> PP.text archiveUri
+    CIO.putLn $ "Archive version: "  <> archiveVersion
+    CIO.putLn $ "Threads: "          <> PP.show threads
+    CIO.putLn $ "AWS Log level: "    <> PP.show awsLogLevel
 
     planJson <- Z.loadPlan (opts ^. the @"path" </> opts ^. the @"buildPath")
       & do OO.catch @DecodeError \e -> do
-            CIO.hPutStrLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> tshow e
+            CIO.hPutLn IO.stderr $ "ERROR: Unable to parse plan.json file: " <> PP.show e
             OO.throw ExitFailure
 
     compilerContext <- Z.mkCompilerContext planJson
       & do OO.catch @Text \e -> do
-            CIO.hPutStrLn IO.stderr e
+            CIO.hPutLn IO.stderr $ "ERROR: " <> PP.pretty e
             OO.throw ExitFailure
 
     let compilerId = planJson ^. the @"compilerId"
@@ -126,10 +127,10 @@ runSyncToArchive opts = do
     unless storeCompilerPackageDbPathExists $
       liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
 
-    CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
+    CIO.putLn $ "Syncing " <> PP.show (length packages) <> " packages"
 
     IO.withSystemTempDirectory "cabal-cache" $ \tempPath -> do
-      CIO.putStrLn $ "Temp path: " <> tshow tempPath
+      CIO.putLn $ "Temp path: " <> PP.show tempPath
 
       liftIO $ IO.pooledForConcurrentlyN_ (opts ^. the @"threads") packages $ \pInfo -> do
         OO.runOops $ workLoop tEarlyExit do
@@ -140,18 +141,18 @@ runSyncToArchive opts = do
           let packageName         = pInfo ^. the @"packageName"
 
           when (packageName `S.member` ignorePackages) do
-            CIO.hPutStrLn IO.stderr $ "Ignoring package: " <> packageName
+            CIO.hPutLn IO.stderr $ "Ignoring package: " <> PP.text packageName
             OO.throw WorkSkipped
 
           -- either write "normal" package, or a user-specific one if the package cannot be shared
           let targetFile = if canShare planData (Z.packageId pInfo) then archiveFile else scopedArchiveFile
 
           archiveFileExists <- IO.resourceExists envAws targetFile
-            & do OO.catch @InvalidUrl \(InvalidUrl url' reason') -> do
-                  CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
+            & do OO.catch @InvalidUrl \(InvalidUrl url reason) -> do
+                  CIO.hPutLn IO.stderr $ "Invalid URL: " <> PP.pretty url <> ", " <> PP.pretty reason
                   OO.throw WorkSkipped
             & do OO.catch @UnsupportedUri \e -> do
-                  CIO.hPutStrLn IO.stderr $ "Unsupported URI: " <> tshow e
+                  CIO.hPutLn IO.stderr $ "Unsupported URI: " <> PP.show e
                   OO.throw WorkSkipped
 
           unless archiveFileExists do
@@ -163,7 +164,7 @@ runSyncToArchive opts = do
 
               let rp2 = Z.relativePaths storePath pInfo
 
-              CIO.putStrLn $ "Creating " <> AWS.toText targetFile
+              CIO.putLn $ "Creating " <> PP.text targetFile
 
               let tempArchiveFile = tempPath </> archiveFileBasename
 
@@ -171,40 +172,40 @@ runSyncToArchive opts = do
 
               IO.createTar tempArchiveFile (rp2 <> [metas])
                 & do OO.catch @ArchiveError \_ -> do
-                      CIO.hPutStrLn IO.stderr $ "Unable tar " <> tshow tempArchiveFile
+                      CIO.hPutLn IO.stderr $ "Unable tar " <> PP.show tempArchiveFile
                       OO.throw WorkSkipped
 
               (liftIO (LBS.readFile tempArchiveFile) >>= IO.writeResource envAws targetFile maxRetries)
                 & do OO.catch @AwsError \e -> do
-                      CIO.hPutStrLn IO.stderr $ mempty
+                      CIO.hPutLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayAwsError e
+                        <> PP.pretty (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> " " <> PP.show e
                       OO.throw WorkFatal
                 & do OO.catch @HttpError \e -> do
-                      CIO.hPutStrLn IO.stderr $ mempty
+                      CIO.hPutLn IO.stderr $ mempty
                         <> "ERROR: No write access to archive uris: "
-                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> displayHttpError e
+                        <> PP.pretty (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> " " <> PP.show e
                       OO.throw WorkFatal
                 & do OO.catch @NotImplemented \e -> do
-                      CIO.hPutStrLn IO.stderr $ mempty
+                      CIO.hPutLn IO.stderr $ mempty
                         <> "Operation not implemented: "
-                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> " " <> tshow e
+                        <> PP.show (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> " " <> PP.show e
                       OO.throw WorkFatal
                 & do OO.catch @UnsupportedUri \e -> do
-                      CIO.hPutStrLn IO.stderr $ mempty
+                      CIO.hPutLn IO.stderr $ mempty
                         <> "Unsupported URI: "
-                        <> tshow (fmap AWS.toText [scopedArchiveFile, archiveFile])
-                        <> ": " <> tshow e
+                        <> PP.show (fmap AWS.toText [scopedArchiveFile, archiveFile])
+                        <> ": " <> PP.show e
                       OO.throw WorkFatal
               
     return ()
 
   earlyExit <- STM.readTVarIO tEarlyExit
 
-  when earlyExit $ CIO.hPutStrLn IO.stderr "Early exit due to error"
+  when earlyExit $ CIO.hPutLn IO.stderr "Early exit due to error"
 
 workLoop :: ()
   => MonadIO m

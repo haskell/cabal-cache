@@ -9,8 +9,8 @@ import Control.Monad.Except   (MonadError)
 import Control.Monad.IO.Class (MonadIO(..))
 
 import qualified Control.Monad.Oops                 as OO
-import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.Pretty     as PP
 import qualified System.Directory                   as IO
 import qualified System.Exit                        as IO
 import qualified System.Process                     as IO
@@ -23,7 +23,7 @@ copyDirectoryRecursive :: ()
   -> String
   -> m ()
 copyDirectoryRecursive source target = do
-  CIO.putStrLn $ "Copying recursively from " <> T.pack source <> " to " <> T.pack target
+  CIO.putLn $ "Copying recursively from " <> PP.text source <> " to " <> PP.text target
   process <- liftIO $ IO.spawnProcess "cp" ["-r", source, target]
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of

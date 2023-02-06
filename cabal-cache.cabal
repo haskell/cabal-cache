@@ -48,6 +48,7 @@ common mtl                            { build-depends: mtl                      
 common network-uri                    { build-depends: network-uri                    >= 2.6.4.1    && < 2.8    }
 common oops                           { build-depends: oops                           >= 0.2        && < 0.3    }
 common optparse-applicative           { build-depends: optparse-applicative           >= 0.14       && < 0.18   }
+common prettyprinter                  { build-depends: prettyprinter                  >= 1.7.1      && < 1.8    }
 common process                        { build-depends: process                        >= 1.6.5.0    && < 1.7    }
 common raw-strings-qq                 { build-depends: raw-strings-qq                 >= 1.1        && < 2      }
 common relation                       { build-depends: relation                       >= 0.5        && < 0.6    }
@@ -62,6 +63,7 @@ common time                           { build-depends: time                     
 common topograph                      { build-depends: topograph                      >= 1          && < 2      }
 common transformers                   { build-depends: transformers                   >= 0.5.6.2    && < 0.7    }
 common unliftio                       { build-depends: unliftio                       >= 0.2.10     && < 0.3    }
+common yaml                           { build-depends: yaml                           >= 0.2.10     && < 0.3    }
 common zlib                           { build-depends: zlib                           >= 0.6.2      && < 0.7    }
 
 common project-config
@@ -104,6 +106,7 @@ library
                         network-uri,
                         oops,
                         optparse-applicative,
+                        prettyprinter,
                         process,
                         relation,
                         resourcet,
@@ -134,6 +137,7 @@ library
                         HaskellWorks.CabalCache.Location
                         HaskellWorks.CabalCache.Metadata
                         HaskellWorks.CabalCache.Options
+                        HaskellWorks.CabalCache.Pretty
                         HaskellWorks.CabalCache.Show
                         HaskellWorks.CabalCache.Store
                         HaskellWorks.CabalCache.Text
@@ -159,6 +163,7 @@ executable cabal-cache
                         network-uri,
                         oops,
                         optparse-applicative,
+                        prettyprinter,
                         resourcet,
                         stm,
                         stringsearch,

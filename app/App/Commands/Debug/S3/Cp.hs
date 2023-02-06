@@ -16,9 +16,8 @@ import Control.Monad.Trans.AWS          (envOverride, setEndpoint)
 import Data.ByteString                  (ByteString)
 import Data.Generics.Product.Any        (the)
 import Data.Monoid                      (Dual(Dual), Endo(Endo))
-import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
+import HaskellWorks.CabalCache.AppError (AwsError(..))
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
-import HaskellWorks.CabalCache.Show     (tshow)
 import Network.URI                      (parseURI)
 
 import qualified App.Commands.Options.Types         as Z
@@ -27,6 +26,7 @@ import qualified Data.Text                          as T
 import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3     as AWS
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.Pretty     as PP
 import qualified Network.AWS                        as AWS
 import qualified Network.AWS.Data                   as AWS
 import qualified Options.Applicative                as OA
@@ -52,11 +52,11 @@ runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
 
     AWS.copyS3Uri envAws srcUri dstUri
       & do OO.catch @AwsError \e -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsError e
+            CIO.hPutLn IO.stderr $ "Copy failed: " <> PP.show e
       & do OO.catch @CopyFailed \CopyFailed -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed"
+            CIO.hPutLn IO.stderr $ "Copy failed"
       & do OO.catch @UnsupportedUri \e -> do
-            CIO.hPutStrLn IO.stderr $ "Unsupported uri: " <> tshow e
+            CIO.hPutLn IO.stderr $ "Unsupported uri: " <> PP.show e
 
 optsCp :: OA.Parser CpOptions
 optsCp = CpOptions

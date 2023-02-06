@@ -9,7 +9,6 @@ import Control.Concurrent           (myThreadId)
 import Control.Lens                 ((<&>), (.~))
 import Control.Monad                (when, forM_)
 import Data.ByteString.Builder      (toLazyByteString)
-import HaskellWorks.CabalCache.Show (tshow)
 import Network.HTTP.Client          (HttpException (..), HttpExceptionContent (..))
 
 import qualified Data.ByteString                    as BS
@@ -18,8 +17,10 @@ import qualified Data.ByteString.Lazy               as LBS
 import qualified Data.ByteString.Lazy.Char8         as LC8
 import qualified Data.Text.Encoding                 as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
+import qualified HaskellWorks.CabalCache.Pretty     as PP
 import qualified Network.AWS                        as AWS
 import qualified System.IO                          as IO
+import qualified Prettyprinter                      as PP
 
 mkEnv :: AWS.Region -> (AWS.LogLevel -> LBS.ByteString -> IO ()) -> IO AWS.Env
 mkEnv region lg = do
@@ -59,5 +60,5 @@ awsLogger maybeConfigLogLevel msgLogLevel message =
   forM_ maybeConfigLogLevel $ \configLogLevel ->
     when (msgLogLevel <= configLogLevel) do
       threadId <- myThreadId
-      CIO.hPutStrLn IO.stderr $ "[" <> tshow msgLogLevel <> "] [tid: " <> tshow threadId <> "]"  <> text
+      CIO.hPutLn IO.stderr $ "[" <> PP.text msgLogLevel <> "] [tid: " <> PP.show threadId <> "]"  <> PP.pretty text
   where text = T.decodeUtf8 $ LBS.toStrict message

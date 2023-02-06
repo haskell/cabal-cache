@@ -16,7 +16,6 @@ import Control.Monad.Except         (MonadError)
 import Control.Monad.IO.Class       (MonadIO(liftIO))
 import Data.Function                ((&))
 import Data.Set                     ((\\))
-import HaskellWorks.CabalCache.Show (tshow)
 import Prelude                      hiding (fail)
 
 import qualified Control.Concurrent.STM                  as STM
@@ -26,6 +25,8 @@ import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
 import qualified HaskellWorks.CabalCache.IO.Console      as CIO
+import qualified HaskellWorks.CabalCache.Pretty          as PP
+import qualified Prettyprinter                           as PP
 import qualified System.IO                               as IO
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
@@ -89,15 +90,15 @@ runQueue downloadQueue f = do
     Just packageId -> do
       downloadStatus <- f packageId
         & do CMC.handleAll \e -> do
-              liftIO $ CIO.hPutStrLn IO.stderr $ "Warning: Unexpected exception during download of " <> packageId <> ": " <> tshow e
+              liftIO $ CIO.hPutLn IO.stderr $ "Warning: Unexpected exception during download of " <> PP.pretty packageId <> ": " <> PP.show e
               liftIO $ IO.hFlush IO.stderr
               pure DownloadFailure
       case downloadStatus of
         DownloadSuccess -> do
-          liftIO $ CIO.hPutStrLn IO.stderr $ "Downloaded " <> packageId
+          liftIO $ CIO.hPutLn IO.stderr $ "Downloaded " <> PP.pretty packageId
           liftIO $ STM.atomically $ commit downloadQueue packageId
         DownloadFailure -> do
-          liftIO $ CIO.hPutStrLn IO.stderr $ "Failed to download " <> packageId
+          liftIO $ CIO.hPutLn IO.stderr $ "Failed to download " <> PP.pretty packageId
           liftIO $ STM.atomically $ failDownload downloadQueue packageId
       runQueue downloadQueue f
 
