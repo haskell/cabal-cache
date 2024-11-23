@@ -18,8 +18,10 @@ module HaskellWorks.CabalCache.Core
 
 import Control.DeepSeq                  (NFData)
 import Control.Lens                     ((<&>), (&), (^.))
+import Control.Monad
 import Control.Monad.Catch              (MonadCatch(..))
-import Control.Monad.Except             (ExceptT, forM, MonadIO(..), MonadError(..))
+import Control.Monad.Except             (ExceptT, MonadError(..))
+import Control.Monad.IO.Class           (MonadIO(..))
 import Data.Aeson                       (eitherDecode)
 import Data.Bifunctor                   (first)
 import Data.Bool                        (bool)
