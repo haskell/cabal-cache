@@ -9,7 +9,7 @@ license:                BSD-3-Clause
 license-file:           LICENSE
 author:                 John Ky
 maintainer:             newhoggy@gmail.com
-copyright:              John Ky 2019-2023
+copyright:              John Ky 2019-2024
 category:               Development
 tested-with:            GHC == 9.4.8, GHC == 9.2.8, GHC == 8.10.7
 extra-source-files:     README.md
