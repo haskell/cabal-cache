@@ -36,6 +36,10 @@ jobs:
         if: matrix.os == 'windows-latest'
         run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
 
+      - name: Setup environment
+        run: |
+          echo 'CABAL_STORE_PATH="${{ steps.setup-haskell.outputs.cabal-store }}"' >> $GITHUB_ENV
+
       - name: Configure project
         run: |
           cabal configure --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
