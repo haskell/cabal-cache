@@ -3,6 +3,7 @@ module App.Commands.Debug.S3
   ) where
 
 import App.Commands.Debug.S3.Cp (cmdCp)
+import HaskellWorks.Prelude
 
 import qualified Options.Applicative as OA
 

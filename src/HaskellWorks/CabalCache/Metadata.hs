@@ -7,11 +7,9 @@ module HaskellWorks.CabalCache.Metadata
     deleteMetadata,
   ) where
 
-import Control.Lens                   ((<&>))
-import Control.Monad                  (forM_)
-import Control.Monad.IO.Class         (MonadIO, liftIO)
 import HaskellWorks.CabalCache.Core   (PackageInfo (..))
 import HaskellWorks.CabalCache.IO.Tar (TarGroup (..))
+import HaskellWorks.Prelude
 import System.FilePath                (takeFileName, (</>))
 
 import qualified Data.ByteString.Lazy as LBS

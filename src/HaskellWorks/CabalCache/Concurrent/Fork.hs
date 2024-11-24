@@ -3,7 +3,7 @@ module HaskellWorks.CabalCache.Concurrent.Fork
   ) where
 
 import Control.Exception (finally)
-import Control.Monad     (when, forM_)
+import HaskellWorks.Prelude
 
 import qualified Control.Concurrent     as IO
 import qualified Control.Concurrent.STM as STM

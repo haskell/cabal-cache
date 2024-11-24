@@ -9,30 +9,21 @@ module App.Commands.SyncFromArchive
 
 import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncFromArchiveOptions (SyncFromArchiveOptions))
-import Control.Applicative              (optional, Alternative(..))
-import Control.Lens                     ((^..), (%~), (&), (^.), (.~), Each(each))
+import Control.Lens                     ((^..), (%~), (^.), (.~), Each(each))
 import Control.Lens.Combinators         (traverse1)
-import Control.Monad                    (when, unless, forM_)
 import Control.Monad.Catch              (MonadCatch)
-import Control.Monad.Except             (ExceptT)
-import Control.Monad.IO.Class           (MonadIO(..))
 import Control.Monad.Trans.Resource     (runResourceT)
-import Data.ByteString                  (ByteString)
 import Data.ByteString.Lazy.Search      (replace)
-import Data.Functor                     ((<&>))
 import Data.Generics.Product.Any        (the)
 import Data.List.NonEmpty               (NonEmpty)
-import Data.Maybe                       (fromMaybe)
-import Data.Semigroup                   (Semigroup(..))
-import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError(..), ExitFailure(..), InvalidUrl(..), NotFound, UnsupportedUri(..))
 import HaskellWorks.CabalCache.IO.Lazy  (readFirstAvailableResource)
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError(..))
 import HaskellWorks.CabalCache.Location (toLocation, (<.>), (</>), Location)
 import HaskellWorks.CabalCache.Metadata (loadMetadata)
-import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
+import HaskellWorks.Prelude
 import Options.Applicative              (CommandFields, Mod, Parser)
 import Options.Applicative.NonEmpty     (some1)
 import System.Directory                 (createDirectoryIfMissing, doesDirectoryExist)
@@ -135,7 +126,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
 
     unless storeCompilerPackageDbPathExists do
       CIO.putStrLn "Package DB missing. Creating Package DB"
-      liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
+      liftIO $ GhcPkg.contextInit compilerContext storeCompilerPackageDbPath
 
     packages <- liftIO $ Z.getPackages storePath planJson
 
@@ -161,7 +152,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
           pInfo <- pure (M.lookup packageId pInfos)
             & do OO.onNothing do
                   CIO.hPutStrLn IO.stderr $ "Warning: Invalid package id: " <> packageId
-                  DQ.succeed
+                  DQ.downloadSucceed
 
           let archiveBaseName     = Z.packageDir pInfo <.> ".tar.gz"
           let archiveFiles        = versionedArchiveUris & traverse1 %~ (</> T.pack archiveBaseName)
@@ -174,17 +165,17 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
           package <- pure (M.lookup packageId planPackages)
             & do OO.onNothing do
                   CIO.hPutStrLn IO.stderr $ "Warning: package not found" <> packageName
-                  DQ.succeed
+                  DQ.downloadSucceed
 
           when (skippable package) do
             CIO.putStrLn $ "Skipping: " <> packageName
-            DQ.succeed
+            DQ.downloadSucceed
 
           when (packageName `S.member` ignorePackages) do
             CIO.putStrLn $ "Ignoring: " <> packageName
-            DQ.fail
+            DQ.downloadFail
 
-          when storeDirectoryExists DQ.succeed
+          when storeDirectoryExists DQ.downloadSucceed
 
           OO.suspend runResourceT $ ensureStorePathCleanup packageStorePath do
             let locations = sconcat $ fmap L.tuple2ToNel (NEL.zip archiveFiles scopedArchiveFiles)
@@ -192,19 +183,19 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
             (existingArchiveFileContents, existingArchiveFile) <- readFirstAvailableResource envAws locations maxRetries
               & do OO.catch @AwsError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayAwsError e
-                    DQ.fail
+                    DQ.downloadFail
               & do OO.catch @HttpError \e -> do
                     CIO.putStrLn $ "Unable to download any of: " <> tshow locations <> " because: " <> displayHttpError e
-                    DQ.fail
+                    DQ.downloadFail
               & do OO.catch @NotFound \_ -> do
                     CIO.putStrLn $ "Not found: " <> tshow locations
-                    DQ.fail
+                    DQ.downloadFail
               & do OO.catch @InvalidUrl \(InvalidUrl url' reason') -> do
                     CIO.hPutStrLn IO.stderr $ "Invalid URL: " <> tshow url' <> ", " <> reason'
-                    DQ.fail
+                    DQ.downloadFail
               & do OO.catch @UnsupportedUri \e -> do
                     CIO.hPutStrLn IO.stderr $ tshow e
-                    DQ.fail
+                    DQ.downloadFail
 
             CIO.putStrLn $ "Extracting: " <> AWS.toText existingArchiveFile
 
@@ -214,13 +205,13 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
             IO.extractTar tempArchiveFile storePath
               & do OO.catch @ArchiveError \(ArchiveError reason') -> do
                     CIO.putStrLn $ "Unable to extract tar at " <> tshow tempArchiveFile <> " because: " <> reason'
-                    DQ.fail
+                    DQ.downloadFail
 
             meta <- loadMetadata packageStorePath
             oldStorePath <- pure (Map.lookup "store-path" meta)
               & do OO.onNothing do
                     CIO.putStrLn "store-path is missing from Metadata"
-                    DQ.fail
+                    DQ.downloadFail
 
             let Z.Tagged conf _ = Z.confPath pInfo
             
@@ -232,7 +223,7 @@ runSyncFromArchive opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
               liftIO $ LBS.writeFile tempConfPath (replace (LBS.toStrict oldStorePath) (C8.pack storePath) confContents)
               liftIO $ IO.copyFile tempConfPath theConfPath >> IO.removeFile tempConfPath
 
-            DQ.succeed
+            DQ.downloadSucceed
 
     CIO.putStrLn "Recaching package database"
 

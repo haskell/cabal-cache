@@ -7,7 +7,7 @@ module HaskellWorks.CabalCache.IntegrationSpec
   ( spec
   ) where
 
-import Control.Monad              (forM_)
+import HaskellWorks.Prelude
 import System.FilePath            ((</>))
 import Test.Hspec                 (Spec, describe, it)
 

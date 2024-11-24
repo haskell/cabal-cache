@@ -7,6 +7,7 @@ module HaskellWorks.CabalCache.QuerySpec
   ) where
 
 import HaskellWorks.Hspec.Hedgehog
+import HaskellWorks.Prelude
 import Hedgehog
 import Test.Hspec
 import Text.RawString.QQ

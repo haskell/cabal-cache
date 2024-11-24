@@ -9,14 +9,11 @@ module HaskellWorks.CabalCache.AWS.Env
   ) where
 
 import Control.Concurrent           (myThreadId)
-import Control.Lens                 ((.~), (%~))
-import Control.Monad                (when, forM_)
-import Data.ByteString              (ByteString)
 import Data.ByteString.Builder      (toLazyByteString)
-import HaskellWorks.CabalCache.Show (tshow)
-import Network.HTTP.Client          (HttpException (..), HttpExceptionContent (..))
 import Data.Generics.Product.Any    (the)
-import Data.Function                ((&))
+import HaskellWorks.Prelude
+import Lens.Micro
+import Network.HTTP.Client          (HttpException (..), HttpExceptionContent (..))
 
 import qualified Amazonka                           as AWS
 import qualified Data.ByteString                    as BS

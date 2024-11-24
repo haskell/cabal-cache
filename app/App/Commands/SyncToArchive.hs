@@ -8,25 +8,18 @@ module App.Commands.SyncToArchive
 
 import App.Commands.Options.Parser      (optsPackageIds, text)
 import App.Commands.Options.Types       (SyncToArchiveOptions (SyncToArchiveOptions))
-import Control.Applicative              (Alternative(..), optional)
 import Control.Concurrent.STM           (TVar)
-import Control.Lens                     ((<&>), (&), (^..), (^.), (.~), (%~), Each(each))
-import Control.Monad                    (filterM, when, unless)
-import Control.Monad.Except             (ExceptT)
-import Control.Monad.IO.Class           (MonadIO(..))
-import Data.ByteString                  (ByteString)
+import Control.Lens                     ((^..), (^.), (.~), (%~), Each(each))
 import Data.Generics.Product.Any        (the)
 import Data.List                        ((\\))
-import Data.Maybe                       (fromMaybe)
-import Data.Text                        (Text)
 import HaskellWorks.CabalCache.AppError (AwsError, HttpError (..), displayAwsError, displayHttpError)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..), InvalidUrl(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..), toLocation, (<.>), (</>))
 import HaskellWorks.CabalCache.IO.Tar   (ArchiveError)
 import HaskellWorks.CabalCache.Metadata (createMetadata)
-import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Topology (buildPlanData, canShare)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
+import HaskellWorks.Prelude
 import Options.Applicative              (Parser, Mod, CommandFields)
 import System.Directory                 (doesDirectoryExist)
 import System.FilePath                  (takeDirectory)
@@ -131,7 +124,7 @@ runSyncToArchive opts = do
     storeCompilerPackageDbPathExists <- liftIO $ doesDirectoryExist storeCompilerPackageDbPath
 
     unless storeCompilerPackageDbPathExists $
-      liftIO $ GhcPkg.init compilerContext storeCompilerPackageDbPath
+      liftIO $ GhcPkg.contextInit compilerContext storeCompilerPackageDbPath
 
     CIO.putStrLn $ "Syncing " <> tshow (length packages) <> " packages"
 

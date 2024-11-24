@@ -8,14 +8,10 @@ module HaskellWorks.CabalCache.AwsSpec
   ( spec
   ) where
 
-import Control.Lens
-import Control.Monad
-import Control.Monad.Except             (runExceptT)
-import Control.Monad.IO.Class
-import Data.Maybe                       (isJust)
 import HaskellWorks.CabalCache.AppError (AwsError(..))
 import HaskellWorks.CabalCache.Error    (UnsupportedUri)
 import HaskellWorks.Hspec.Hedgehog
+import HaskellWorks.Prelude
 import Hedgehog
 import Test.Hspec
 
@@ -40,7 +36,7 @@ spec = describe "HaskellWorks.CabalCache.QuerySpec" do
     ci <- liftIO $ IO.lookupEnv "CI" <&> isJust
     unless ci do
       envAws <- liftIO $ AWS.mkEnv AWS.Oregon (const LBSC.putStrLn)
-      let Just uri = URI.parseURI "s3://jky-mayhem/hjddhd"
+      let Just uri = URI.parseURI "s3://cache.haskellworks.io/hjddhd"
       result :: Either (OO.Variant '[AwsError, UnsupportedUri]) ()
         <- liftIO $ runExceptT $ OO.suspend AWS.runResourceT $ void (AWS.headS3Uri envAws uri)
 

@@ -9,11 +9,10 @@ module App.Commands.Options.Types
     VersionOptions(..),
   ) where
 
-import Data.ByteString                  (ByteString)
 import Data.Set                         (Set)
-import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.Location (Location)
 import HaskellWorks.CabalCache.Types    (PackageId)
+import HaskellWorks.Prelude
 import Network.URI                      (URI)
 
 import qualified Amazonka           as AWS

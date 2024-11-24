@@ -5,13 +5,13 @@ module HaskellWorks.CabalCache.GhcPkg
     runGhcPkg,
     testAvailability,
     recache,
-    init,
+    contextInit,
   ) where
 
-import Prelude                   hiding (init)
-
-import Control.Lens              ((^.))
 import Data.Generics.Product.Any (HasAny(the))
+import HaskellWorks.Prelude
+import HaskellWorks.Unsafe
+import Lens.Micro
 import System.Exit               (ExitCode (..), exitWith)
 import System.Process            (waitForProcess)
 
@@ -39,5 +39,5 @@ testAvailability cc = runGhcPkg cc ["--version"]
 recache :: Z.CompilerContext -> FilePath -> IO ()
 recache cc packageDb = runGhcPkg cc ["recache", "--package-db", packageDb]
 
-init :: Z.CompilerContext -> FilePath -> IO ()
-init cc packageDb = runGhcPkg cc ["init", packageDb]
+contextInit :: Z.CompilerContext -> FilePath -> IO ()
+contextInit cc packageDb = runGhcPkg cc ["init", packageDb]

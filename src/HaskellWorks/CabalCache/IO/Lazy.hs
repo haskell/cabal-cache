@@ -17,19 +17,16 @@ module HaskellWorks.CabalCache.IO.Lazy
     retryOnE,
   ) where
 
-import Control.Lens                     ((&), (^.))
-import Control.Monad                    (unless)
 import Control.Monad.Catch              (MonadCatch(..))
-import Control.Monad.Except             (ExceptT, MonadError)
-import Control.Monad.IO.Class           (MonadIO(..))
+import Control.Monad.Except             (MonadError)
 import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
-import Data.Functor.Identity            (Identity(..))
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
 import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
-import HaskellWorks.CabalCache.Show     (tshow)
+import HaskellWorks.Prelude
+import Lens.Micro
 import Network.URI                      (URI)
 
 import qualified Amazonka                             as AWS

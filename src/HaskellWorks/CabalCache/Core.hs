@@ -17,17 +17,13 @@ module HaskellWorks.CabalCache.Core
   ) where
 
 import Control.DeepSeq                  (NFData)
-import Control.Lens                     ((<&>), (&), (^.))
 import Control.Monad.Catch              (MonadCatch(..))
-import Control.Monad.Except             (ExceptT, forM, MonadIO(..), MonadError(..))
+import Control.Monad.Except             (MonadError(..))
 import Data.Aeson                       (eitherDecode)
-import Data.Bifunctor                   (first)
-import Data.Bool                        (bool)
 import Data.Generics.Product.Any        (the)
-import Data.Text                        (Text)
-import GHC.Generics                     (Generic)
 import HaskellWorks.CabalCache.Error    (DecodeError(..))
-import HaskellWorks.CabalCache.Show     (tshow)
+import HaskellWorks.Prelude
+import Lens.Micro
 import System.FilePath                  ((<.>), (</>))
 
 import qualified Control.Monad.Oops             as OO
@@ -135,7 +131,7 @@ relativePaths basePath pInfo =
       <> (pInfo ^. the @"libs")
       <> [packageDir pInfo]
   , IO.TarGroup basePath $ mempty
-      <> ([pInfo ^. the @"confPath"] & filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
+      <> ([pInfo ^. the @"confPath"] & L.filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
   ]
 
 getPackages :: FilePath -> Z.PlanJson -> IO [PackageInfo]
@@ -181,5 +177,5 @@ getLibFiles :: FilePath -> FilePath -> Text -> IO [Library]
 getLibFiles relativeLibPath libPath libPrefix = do
   libExists <- IO.doesDirectoryExist libPath
   if libExists
-     then fmap (relativeLibPath </>) . filter (L.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
+     then fmap (relativeLibPath </>) . L.filter (L.isPrefixOf (T.unpack libPrefix)) <$> IO.listDirectory libPath
      else pure []

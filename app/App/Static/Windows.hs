@@ -3,8 +3,8 @@ module App.Static.Windows
     cabalDirectory,
   ) where
 
-import Data.Maybe                       (fromMaybe)
 import HaskellWorks.CabalCache.Location ((</>))
+import HaskellWorks.Prelude
 
 import qualified App.Static.Base    as S
 import qualified System.Environment as IO

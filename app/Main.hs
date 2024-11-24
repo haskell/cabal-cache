@@ -1,8 +1,7 @@
 module Main where
 
 import App.Commands         (commands)
-import Control.Applicative  ((<**>))
-import Control.Monad        (join)
+import HaskellWorks.Prelude
 
 import qualified Options.Applicative as OA
 

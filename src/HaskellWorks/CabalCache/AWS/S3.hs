@@ -16,19 +16,16 @@ module HaskellWorks.CabalCache.AWS.S3
 
 import Amazonka                           (ResponseBody)
 import Amazonka.Data                      (ToText(..), fromText)
-import Control.Lens                       ((^.))
-import Control.Monad                      (void, unless)
 import Control.Monad.Catch                (MonadCatch(..))
 import Control.Monad.Except               (MonadError)
-import Control.Monad.IO.Class             (MonadIO(..))
-import Control.Monad.Trans.Except         (ExceptT)
 import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
+import Data.Generics.Product.Any          (the)
 import HaskellWorks.CabalCache.AppError   (AwsError(..))
 import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
-import HaskellWorks.CabalCache.Show       (tshow)
+import HaskellWorks.Prelude
+import Lens.Micro
 import Network.URI                        (URI)
-import Data.Generics.Product.Any          (the)
 
 import qualified Amazonka                             as AWS
 -- import qualified Amazonka.Data.Body                   as AWS

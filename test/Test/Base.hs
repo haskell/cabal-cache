@@ -5,10 +5,8 @@ module Test.Base
   , integration
   ) where
 
-import Control.Monad (void)
 import Control.Monad.Catch (MonadCatch)
-import Control.Monad.IO.Class (MonadIO)
-import GHC.Stack (HasCallStack)
+import HaskellWorks.Prelude
 import Hedgehog (MonadTest)
 import Hedgehog.Extras.Test.Process (ExecConfig)
 

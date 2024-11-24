@@ -12,8 +12,7 @@ module HaskellWorks.CabalCache.Error
     UnsupportedUri(UnsupportedUri),
   ) where
 
-import Data.Text    (Text)
-import GHC.Generics (Generic)
+import HaskellWorks.Prelude
 import Network.URI  (URI)
 
 data DecodeError = DecodeError Text deriving (Eq, Show, Generic)

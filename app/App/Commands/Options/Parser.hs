@@ -5,10 +5,8 @@ module App.Commands.Options.Parser
   ) where
 
 import App.Commands.Options.Types (VersionOptions (..))
-import Control.Applicative        (Alternative(..))
-import Control.Monad              (join)
 import Data.Set                   (Set)
-import Data.Text                  (Text)
+import HaskellWorks.Prelude
 import Options.Applicative        (Parser, ReadM)
 
 import qualified Amazonka.Data                  as AWS

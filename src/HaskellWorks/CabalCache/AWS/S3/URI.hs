@@ -7,12 +7,10 @@ module HaskellWorks.CabalCache.AWS.S3.URI
   ( S3Uri(..)
   ) where
 
-import Control.Applicative        (Alternative(many), optional)
 import Control.DeepSeq            (NFData)
-import Control.Lens               ((^.))
 import Data.Generics.Product.Any  (HasAny(the))
-import Data.Text                  (Text)
-import GHC.Generics               (Generic)
+import HaskellWorks.Prelude
+import Lens.Micro
 
 import qualified Amazonka.Data.Text         as AWS
 import qualified Amazonka.S3                as AWS

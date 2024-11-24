@@ -7,17 +7,15 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ( DownloadStatus(..),
     createDownloadQueue,
     runQueue,
-    succeed,
-    fail,
+    downloadSucceed,
+    downloadFail,
   ) where
 
 import Control.Monad.Catch          (MonadMask(..))
 import Control.Monad.Except         (MonadError)
-import Control.Monad.IO.Class       (MonadIO(liftIO))
-import Data.Function                ((&))
 import Data.Set                     ((\\))
-import HaskellWorks.CabalCache.Show (tshow)
 import Prelude                      hiding (fail)
+import HaskellWorks.Prelude
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Control.Monad.Catch                     as CMC
@@ -30,17 +28,17 @@ import qualified System.IO                               as IO
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
 
-succeed :: forall e a m. ()
+downloadSucceed :: forall e a m. ()
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` DownloadStatus
   => m a
-succeed = OO.throw DownloadSuccess
+downloadSucceed = OO.throw DownloadSuccess
 
-fail :: forall e a m. ()
+downloadFail :: forall e a m. ()
   => MonadError (OO.Variant e) m
   => e `OO.CouldBe` DownloadStatus
   => m a
-fail = OO.throw DownloadFailure
+downloadFail = OO.throw DownloadFailure
 
 createDownloadQueue :: [(Z.ProviderId, Z.ConsumerId)] -> STM.STM Z.DownloadQueue
 createDownloadQueue dependencies = do

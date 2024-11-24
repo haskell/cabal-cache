@@ -11,7 +11,7 @@ author:                 John Ky
 maintainer:             newhoggy@gmail.com
 copyright:              John Ky 2019-2023
 category:               Development
-tested-with:            GHC == 9.4.8, GHC == 9.2.8, GHC == 8.10.7
+tested-with:            GHC == 9.6.6, GHC == 9.4.8, GHC == 9.2.8
 extra-source-files:     README.md
 
 source-repository head
@@ -36,7 +36,7 @@ common exceptions                     { build-depends: exceptions               
 common filepath                       { build-depends: filepath                       >= 1.3        && < 1.6    }
 common generic-lens                   { build-depends: generic-lens                   >= 1.1.0.0    && < 2.3    }
 common Glob                           { build-depends: Glob                           >= 0.10.2     && < 0.11   }
-common hedgehog                       { build-depends: hedgehog                       >= 1.0        && < 1.5    }
+common hedgehog                       { build-depends: hedgehog                       >= 1.5        && < 1.6    }
 common hedgehog-extras                { build-depends: hedgehog-extras                >= 0.4        && < 0.7    }
 common hspec                          { build-depends: hspec                          >= 2.4        && < 3      }
 common http-client                    { build-depends: http-client                    >= 0.5.14     && < 0.8    }
@@ -44,11 +44,13 @@ common http-client-tls                { build-depends: http-client-tls          
 common http-types                     { build-depends: http-types                     >= 0.12.3     && < 0.13   }
 common hw-hedgehog                    { build-depends: hw-hedgehog                    >= 0.1.0.3    && < 0.2    }
 common hw-hspec-hedgehog              { build-depends: hw-hspec-hedgehog              >= 0.1.0.4    && < 0.2    }
+common hw-prelude                     { build-depends: hw-prelude                     >= 0.0.4.0    && < 0.1    }
 common lens                           { build-depends: lens                           >= 4.17       && < 6      }
 common mtl                            { build-depends: mtl                            >= 2.2.2      && < 2.4    }
 common network-uri                    { build-depends: network-uri                    >= 2.6.4.1    && < 2.8    }
 common oops                           { build-depends: oops                           >= 0.2        && < 0.3    }
 common optparse-applicative           { build-depends: optparse-applicative           >= 0.14       && < 0.19   }
+common microlens                      { build-depends: microlens                      >= 0.4.13.1   && < 0.5    }
 common process                        { build-depends: process                        >= 1.6.5.0    && < 1.7    }
 common raw-strings-qq                 { build-depends: raw-strings-qq                 >= 1.1        && < 2      }
 common relation                       { build-depends: relation                       >= 0.5        && < 0.6    }
@@ -72,11 +74,13 @@ common project-config
                         FlexibleContexts
                         LambdaCase
                         MonoLocalBinds
+                        NoImplicitPrelude
                         TypeOperators
   ghc-options:          -Wall
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
                         -Wtabs
+                        -Wunused-packages
 
   if impl(ghc >= 8.10.1)
     ghc-options:        -Wunused-packages
@@ -100,7 +104,8 @@ library
                         http-client,
                         http-client-tls,
                         http-types,
-                        lens,
+                        hw-prelude,
+                        microlens,
                         mtl,
                         network-uri,
                         oops,
@@ -111,7 +116,6 @@ library
                         stm,
                         text,
                         topograph,
-                        transformers,
   other-modules:        Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   hs-source-dirs:       src
@@ -135,7 +139,6 @@ library
                         HaskellWorks.CabalCache.Location
                         HaskellWorks.CabalCache.Metadata
                         HaskellWorks.CabalCache.Options
-                        HaskellWorks.CabalCache.Show
                         HaskellWorks.CabalCache.Store
                         HaskellWorks.CabalCache.Text
                         HaskellWorks.CabalCache.Topology
@@ -155,8 +158,9 @@ executable cabal-cache
                         exceptions,
                         filepath,
                         generic-lens,
+                        hw-prelude,
+                        microlens,
                         lens,
-                        mtl,
                         network-uri,
                         oops,
                         optparse-applicative,
@@ -201,8 +205,7 @@ test-suite cabal-cache-test
                         hspec,
                         http-types,
                         hw-hspec-hedgehog,
-                        lens,
-                        mtl,
+                        hw-prelude,
                         network-uri,
                         oops,
                         raw-strings-qq,

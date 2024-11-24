@@ -7,6 +7,7 @@ module HaskellWorks.CabalCache.AWS.Error
 import Control.Monad.Catch              (MonadCatch(..), MonadThrow(throwM))
 import Control.Monad.Except             (MonadError)
 import HaskellWorks.CabalCache.AppError (AwsError(..))
+import HaskellWorks.Prelude
 
 import qualified Amazonka                             as AWS
 import qualified Control.Monad.Oops                   as OO

@@ -7,6 +7,7 @@ module HaskellWorks.CabalCache.LocationSpec
 import Data.Maybe                       (fromJust)
 import HaskellWorks.CabalCache.Location
 import HaskellWorks.Hspec.Hedgehog
+import HaskellWorks.Prelude
 import Hedgehog
 import Network.URI                      (URI)
 import Test.Hspec

@@ -7,6 +7,7 @@ module App.Commands.Version
   ) where
 
 import App.Commands.Options.Parser (optsVersion)
+import HaskellWorks.Prelude
 import Options.Applicative         (Mod, CommandFields)
 
 import qualified App.Commands.Options.Types         as Z

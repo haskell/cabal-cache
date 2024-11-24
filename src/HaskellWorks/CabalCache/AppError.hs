@@ -11,9 +11,7 @@ module HaskellWorks.CabalCache.AppError
     displayHttpError,
   ) where
 
-import Data.Text                    (Text)
-import GHC.Generics                 (Generic)
-import HaskellWorks.CabalCache.Show (tshow)
+import HaskellWorks.Prelude
 
 import qualified Network.HTTP.Client as HTTP
 import qualified Network.HTTP.Types as HTTP

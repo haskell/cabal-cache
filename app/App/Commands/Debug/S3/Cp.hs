@@ -9,15 +9,11 @@ module App.Commands.Debug.S3.Cp
 
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
-import Control.Applicative              (Alternative(..), optional)
-import Control.Lens                     ((&), (^.), (.~), (%~))
-import Control.Monad.Except             (MonadIO(..))
-import Data.ByteString                  (ByteString)
-import Data.Functor                     ((<&>))
 import Data.Generics.Product.Any        (the)
 import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
-import HaskellWorks.CabalCache.Show     (tshow)
+import HaskellWorks.Prelude
+import Lens.Micro
 import Network.URI                      (parseURI)
 
 import qualified Amazonka                           as AWS

@@ -5,6 +5,7 @@ import App.Commands.Plan            (cmdPlan)
 import App.Commands.SyncFromArchive (cmdSyncFromArchive)
 import App.Commands.SyncToArchive   (cmdSyncToArchive)
 import App.Commands.Version         (cmdVersion)
+import HaskellWorks.Prelude
 import Options.Applicative          (Parser)
 
 import qualified Options.Applicative as OA

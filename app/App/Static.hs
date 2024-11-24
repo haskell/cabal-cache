@@ -7,8 +7,7 @@ module App.Static
   ) where
 
 import Control.Monad.Catch    (handle)
-import Control.Exception      (IOException)
-import Control.Monad.Identity (Identity(..))
+import HaskellWorks.Prelude
 
 import qualified App.Static.Base    as S
 import qualified App.Static.Posix   as P

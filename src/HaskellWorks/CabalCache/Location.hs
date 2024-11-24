@@ -12,13 +12,10 @@ module HaskellWorks.CabalCache.Location
 )
 where
 
-import Control.Lens                       ((&), (%~))
 import Data.Generics.Product.Any          (HasAny(the))
-import Data.Maybe                         (fromMaybe)
-import Data.Text                          (Text)
-import GHC.Generics                       (Generic)
 import HaskellWorks.CabalCache.AWS.S3.URI (S3Uri (..))
-import HaskellWorks.CabalCache.Show       (tshow)
+import HaskellWorks.Prelude
+import Lens.Micro
 import Network.URI                        (URI)
 
 import qualified Amazonka.Data    as AWS

@@ -9,16 +9,16 @@ module HaskellWorks.CabalCache.Topology
   ) where
 
 import Control.Arrow                 ((&&&))
-import Control.Lens                  (view, (&), (<&>), (^.))
-import Control.Monad                 (join)
-import Data.Either                   (fromRight)
 import Data.Generics.Product.Any     (the)
 import Data.Map.Strict               (Map)
-import Data.Maybe                    (fromMaybe)
 import Data.Set                      (Set)
-import GHC.Generics                  (Generic)
 import HaskellWorks.CabalCache.Types (Package, PackageId, PlanJson)
+import HaskellWorks.Prelude
+import HaskellWorks.Unsafe
+import Lens.Micro
+import Lens.Micro.Extras             (view)
 
+import qualified Data.List       as L
 import qualified Data.Map.Strict as M
 import qualified Data.Set        as S
 import qualified Topograph       as TG
@@ -51,7 +51,7 @@ buildPlanData' plan knownNonShareable =
   fromRight (error "Could not process dependencies") $
     TG.runG plan $ \g ->
       let tg        = TG.transpose g
-          nsPaths   = concatMap (fromMaybe [] . paths tg) knownNonShareable
+          nsPaths   = L.concatMap (fromMaybe [] . paths tg) knownNonShareable
           nsAll     = S.fromList (join nsPaths)
       in PlanData { nonShareable = nsAll }
   where paths g x = (fmap . fmap . fmap) (TG.gFromVertex g) $ TG.dfs g <$> TG.gToVertex g x

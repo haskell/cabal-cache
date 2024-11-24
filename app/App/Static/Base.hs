@@ -3,6 +3,8 @@ module App.Static.Base
     isPosix,
   ) where
 
+import HaskellWorks.Prelude
+
 import qualified System.Directory as IO
 import qualified System.IO.Unsafe as IO
 import qualified System.Info      as I

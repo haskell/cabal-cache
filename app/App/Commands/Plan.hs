@@ -8,16 +8,12 @@ module App.Commands.Plan
   ) where
 
 import App.Commands.Options.Types       (PlanOptions (PlanOptions))
-import Control.Applicative              (optional)
-import Control.Lens                     ((<&>), (&), (^.), (%~), Each(each))
-import Control.Monad                    (forM)
-import Control.Monad.IO.Class           (MonadIO(liftIO))
+import Control.Lens                     ((^.), (%~), Each(each))
 import Data.Generics.Product.Any        (the)
-import Data.Maybe                       (fromMaybe)
 import HaskellWorks.CabalCache.Error    (DecodeError, ExitFailure(..))
 import HaskellWorks.CabalCache.Location (Location (..), (<.>), (</>))
-import HaskellWorks.CabalCache.Show     (tshow)
 import HaskellWorks.CabalCache.Version  (archiveVersion)
+import HaskellWorks.Prelude
 import Options.Applicative              (Parser, Mod, CommandFields)
 
 import qualified Amazonka.Data                      as AWS

@@ -6,7 +6,7 @@ module HaskellWorks.CabalCache.IO.File
   ) where
 
 import Control.Monad.Except   (MonadError)
-import Control.Monad.IO.Class (MonadIO(..))
+import HaskellWorks.Prelude
 
 import qualified Control.Monad.Oops                 as OO
 import qualified Data.Text                          as T

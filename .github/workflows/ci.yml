@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.4.8", "9.2.8", "8.10.7"]
+        ghc: ["9.6.6", "9.4.8", "9.2.8"]
         os: [ubuntu-latest, windows-latest]
         include:
           - ghc: "8.10.7"
@@ -35,6 +35,10 @@ jobs:
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
         run: echo 'EXE_EXT=.exe' >> $GITHUB_ENV
+
+      - name: Setup environment
+        run: |
+          echo 'CABAL_STORE_PATH="${{ steps.setup-haskell.outputs.cabal-store }}"' >> $GITHUB_ENV
 
       - name: Configure project
         run: |
