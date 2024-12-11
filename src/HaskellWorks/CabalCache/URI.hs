@@ -1,6 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-
 module HaskellWorks.CabalCache.URI
   ( reslashUri,
   ) where

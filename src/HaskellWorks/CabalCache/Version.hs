@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module HaskellWorks.CabalCache.Version
   ( archiveVersion,
   ) where

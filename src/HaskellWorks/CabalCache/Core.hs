@@ -1,11 +1,3 @@
-{-# LANGUAGE DeriveAnyClass        #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE TypeApplications      #-}
-
 module HaskellWorks.CabalCache.Core
   ( PackageInfo(..),
     Tagged(..),
@@ -17,16 +9,15 @@ module HaskellWorks.CabalCache.Core
   ) where
 
 import Control.DeepSeq                  (NFData)
-import Control.Monad.Catch              (MonadCatch(..))
-import Control.Monad.Except             (MonadError(..))
 import Data.Aeson                       (eitherDecode)
-import Data.Generics.Product.Any        (the)
+import Effectful
+import Effectful.Zoo.Core
+import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Core.Exception
 import HaskellWorks.CabalCache.Error    (DecodeError(..))
 import HaskellWorks.Prelude
-import Lens.Micro
 import System.FilePath                  ((<.>), (</>))
 
-import qualified Control.Monad.Oops             as OO
 import qualified Data.ByteString.Lazy           as LBS
 import qualified Data.List                      as L
 import qualified Data.Text                      as T
@@ -58,9 +49,6 @@ data PackageInfo = PackageInfo
   , libs        :: [Library]
   } deriving (Show, Eq, Generic, NFData)
 
-(<||>) :: Monad m => ExceptT e m a -> ExceptT e m a -> ExceptT e m a
-(<||>) f g = f `catchError` const g
-
 isPosix :: Bool
 isPosix = I.os /= "mingw32"
 {-# NOINLINE isPosix #-}
@@ -77,85 +65,83 @@ withExeExt' :: Text -> Text
 withExeExt' = T.pack . withExeExt . T.unpack
 
 findExecutable :: ()
-  => MonadIO f
-  => MonadError (OO.Variant e) f
-  => e `OO.CouldBe` Text
+  => r <: Error Text
+  => r <: IOE
   => Text
-  -> f Text
-findExecutable exe = fmap T.pack $
-  liftIO (IO.findExecutable (T.unpack exe)) >>= OO.hoistMaybe (exe <> " is not in path")
+  -> Eff r Text
+findExecutable exe =
+  liftIO (fmap T.pack <$> IO.findExecutable (T.unpack exe))
+    & onNothingM (throw (exe <> " is not in path"))
 
 runGhcPkg :: ()
-  => MonadCatch m
-  => MonadIO m
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` Text
+  => r <: Error Text
+  => r <: IOE
   => Text
   -> [Text]
-  -> m Text
-runGhcPkg cmdExe args = catch (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
-  \(e :: IOError) -> OO.throw $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
+  -> Eff r Text
+runGhcPkg cmdExe args = catchIO (liftIO $ T.pack <$> IO.readProcess (T.unpack cmdExe) (fmap T.unpack args) "") $
+  \(e :: IOError) -> throw $ "Unable to run " <> cmdExe <> " " <> T.unwords args <> ": " <> tshow e
 
 verifyGhcPkgVersion :: ()
-  => MonadError (OO.Variant e) m
-  => MonadIO m
-  => MonadCatch m
-  => e `OO.CouldBe` Text
+  => r <: Error Text
+  => r <: IOE
   => Text
   -> Text
-  -> m Text
+  -> Eff r Text
 verifyGhcPkgVersion version cmdExe = do
   stdout <- runGhcPkg cmdExe ["--version"]
   if T.isSuffixOf (" " <> version) (mconcat (L.take 1 (T.lines stdout)))
     then return cmdExe
-    else OO.throw $ cmdExe <> " is not of version " <> version
+    else throw $ cmdExe <> " is not of version " <> version
 
 mkCompilerContext :: ()
-  => MonadIO m
-  => MonadCatch m
-  => e `OO.CouldBe` Text
+  => r <: Error Text
+  => r <: IOE
   => Z.PlanJson
-  -> ExceptT (OO.Variant e) m Z.CompilerContext
+  -> Eff r Z.CompilerContext
 mkCompilerContext plan = do
-  compilerVersion <- T.stripPrefix "ghc-" (plan ^. the @"compilerId")
-    & OO.hoistMaybe @Text "No compiler version available in plan"
+  compilerVersion <- T.stripPrefix "ghc-" plan.compilerId
+    & onNothing (throw @Text "No compiler version available in plan")
+
   let versionedGhcPkgCmd = "ghc-pkg-" <> compilerVersion
-  ghcPkgCmdPath <-
-          (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
-    <||>  (findExecutable (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion compilerVersion)
+
+  ghcPkgCmdPath <- (findExecutable (withExeExt' versionedGhcPkgCmd)  >>= verifyGhcPkgVersion compilerVersion)
+    & trap_ @Text (findExecutable (withExeExt' "ghc-pkg"         )  >>= verifyGhcPkgVersion compilerVersion)
+
   return (Z.CompilerContext [T.unpack ghcPkgCmdPath])
 
 relativePaths :: FilePath -> PackageInfo -> [IO.TarGroup]
 relativePaths basePath pInfo =
   [ IO.TarGroup basePath $ mempty
-      <> (pInfo ^. the @"libs")
-      <> [packageDir pInfo]
+      <> pInfo.libs
+      <> [pInfo.packageDir]
   , IO.TarGroup basePath $ mempty
-      <> ([pInfo ^. the @"confPath"] & L.filter ((== Present) . (^. the @"tag")) <&> (^. the @"value"))
+      <> ([pInfo.confPath] & L.filter (\c -> c.tag == Present) <&> (.value))
   ]
 
 getPackages :: FilePath -> Z.PlanJson -> IO [PackageInfo]
 getPackages basePath planJson = forM packages (mkPackageInfo basePath compilerId')
   where compilerId' :: Text
-        compilerId' = planJson ^. the @"compilerId"
+        compilerId' = planJson.compilerId
         packages :: [Z.Package]
-        packages = planJson ^. the @"installPlan"
+        packages = planJson.installPlan
 
 loadPlan :: ()
-  => MonadIO m
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` DecodeError
+  => r <: Error DecodeError
+  => r <: IOE
   => FilePath
-  -> m Z.PlanJson
+  -> Eff r Z.PlanJson
 loadPlan resolvedBuildPath = do
   lbs <- liftIO (LBS.readFile (resolvedBuildPath </> "cache" </> "plan.json"))
-  a <- OO.hoistEither $ first (DecodeError . T.pack) (eitherDecode lbs)
+  a <- eitherDecode lbs
+    & onLeft (throw . DecodeError . T.pack)
+
   pure do a :: Z.PlanJson
 
 -------------------------------------------------------------------------------
 mkPackageInfo :: FilePath -> Z.CompilerId -> Z.Package -> IO PackageInfo
 mkPackageInfo basePath cid pkg = do
-  let pid               = pkg ^. the @"id"
+  let pid               = pkg.id
   let compilerPath      = basePath </> T.unpack cid
   let relativeConfPath  = T.unpack cid </> "package.db" </> T.unpack pid <.> ".conf"
   let absoluteConfPath  = basePath </> relativeConfPath
@@ -167,7 +153,7 @@ mkPackageInfo basePath cid pkg = do
   return PackageInfo
     { compilerId  = cid
     , packageId   = pid
-    , packageName = pkg ^. the @"name"
+    , packageName = pkg.name
     , packageDir  = T.unpack cid </> T.unpack pid
     , confPath    = Tagged relativeConfPath (bool Absent Present absoluteConfPathExists)
     , libs        = libFiles

@@ -1,16 +1,9 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-
 module HaskellWorks.CabalCache.AWS.S3.URI
   ( S3Uri(..)
   ) where
 
 import Control.DeepSeq            (NFData)
-import Data.Generics.Product.Any  (HasAny(the))
 import HaskellWorks.Prelude
-import Lens.Micro
 
 import qualified Amazonka.Data.Text         as AWS
 import qualified Amazonka.S3                as AWS
@@ -35,7 +28,7 @@ instance AWS.FromText S3Uri where
     return (S3Uri bn ok)
 
 instance AWS.ToText S3Uri where
-  toText loc = toS3Uri (loc ^. the @"bucket") (loc ^. the @"objectKey")
+  toText loc = toS3Uri loc.bucket loc.objectKey
 
 instance J.ToJSON S3Uri where
   toJSON s3Uri = J.String (AWS.toText s3Uri)

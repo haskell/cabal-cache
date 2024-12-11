@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        ghc: ["9.6.6", "9.4.8", "9.2.8"]
+        ghc: ["9.6.6", "9.4.8"]
         os: [ubuntu-latest, windows-latest]
         include:
           - ghc: "9.6.6"
@@ -30,7 +30,7 @@ jobs:
         id: setup-haskell
         with:
           ghc-version: ${{ matrix.ghc }}
-          cabal-version: 3.8.1.0
+          cabal-version: 3.12.1.0
 
       - name: Set some window specific things
         if: matrix.os == 'windows-latest'
@@ -49,13 +49,14 @@ jobs:
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          BINARY_CACHE_URI: ${{ vars.BINARY_CACHE_URI }}
         with:
           region: us-west-2
           dist-dir: dist-newstyle
           store-path: ${{ steps.setup-haskell.outputs.cabal-store }}
           threads: 16
-          archive-uri: ${{ secrets.BINARY_CACHE_URI }}
-          skip: "${{ secrets.BINARY_CACHE_URI == '' }}"
+          archive-uri: ${{ env.BINARY_CACHE_URI }}
+          skip: "${{ env.BINARY_CACHE_URI == '' }}"
 
       - name: Cabal cache over HTTPS
         uses: action-works/cabal-cache-s3@v1
@@ -66,16 +67,13 @@ jobs:
           archive-uri: https://cache.haskellworks.io/archive
 
       - name: Build
-        # Try building it twice in case of flakey builds on Windows
         run: |
-          cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ || \
-          cabal build all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+ -j1
+          cabal build all --enable-tests --enable-benchmarks
 
       - name: Test
         env:
           AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
           AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          BINARY_CACHE_URI: ${{ secrets.BINARY_CACHE_URI }}
         run: |
           cabal test all --enable-tests --enable-benchmarks --write-ghc-environment-files=ghc8.4.4+
 

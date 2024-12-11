@@ -1,4 +1,4 @@
-cabal-version:          2.2
+cabal-version:          3.4
 
 name:                   cabal-cache
 version:                1.1.0.2
@@ -32,6 +32,17 @@ common containers                     { build-depends: containers               
 common cryptonite                     { build-depends: cryptonite                     >= 0.25       && < 1      }
 common deepseq                        { build-depends: deepseq                        >= 1.4.4.0    && < 1.6    }
 common directory                      { build-depends: directory                      >= 1.3.3.0    && < 1.4    }
+common effectful                      { build-depends: effectful                      >= 2.5        && < 3      }
+common effectful-core                 { build-depends: effectful-core                 >= 2.5        && < 3      }
+common effectful-plugin               { build-depends: effectful-plugin               >= 1.1.0.4    && < 2      }
+common effectful-zoo-amazonka         { build-depends: effectful-zoo:amazonka         >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-console          { build-depends: effectful-zoo:console          >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-core             { build-depends: effectful-zoo:core             >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-datalog          { build-depends: effectful-zoo:datalog          >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-hedgehog         { build-depends: effectful-zoo:hedgehog         >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-hunit            { build-depends: effectful-zoo:hunit            >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-lazy             { build-depends: effectful-zoo:lazy             >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-log              { build-depends: effectful-zoo:log              >= 0.0.1.0    && < 0.1    }
 common exceptions                     { build-depends: exceptions                     >= 0.10.1     && < 0.11   }
 common filepath                       { build-depends: filepath                       >= 1.3        && < 1.6    }
 common generic-lens                   { build-depends: generic-lens                   >= 1.1.0.0    && < 2.3    }
@@ -48,13 +59,13 @@ common hw-prelude                     { build-depends: hw-prelude               
 common lens                           { build-depends: lens                           >= 4.17       && < 6      }
 common mtl                            { build-depends: mtl                            >= 2.2.2      && < 2.4    }
 common network-uri                    { build-depends: network-uri                    >= 2.6.4.1    && < 2.8    }
-common oops                           { build-depends: oops                           >= 0.2        && < 0.3    }
 common optparse-applicative           { build-depends: optparse-applicative           >= 0.14       && < 0.19   }
 common microlens                      { build-depends: microlens                      >= 0.4.13.1   && < 0.5    }
 common process                        { build-depends: process                        >= 1.6.5.0    && < 1.7    }
 common raw-strings-qq                 { build-depends: raw-strings-qq                 >= 1.1        && < 2      }
 common relation                       { build-depends: relation                       >= 0.5        && < 0.6    }
 common resourcet                      { build-depends: resourcet                      >= 1.2.2      && < 1.4    }
+common resourcet-effectful            { build-depends: resourcet-effectful            >= 1.0.1.0    && < 1.1    }
 common selective                      { build-depends: selective                      >= 0.1.0      && < 0.8    }
 common stm                            { build-depends: stm                            >= 2.5.0.0    && < 3      }
 common stringsearch                   { build-depends: stringsearch                   >= 0.3.6.6    && < 0.4    }
@@ -69,21 +80,55 @@ common zlib                           { build-depends: zlib                     
 
 common project-config
   default-language:     Haskell2010
-  default-extensions:   BlockArguments
+  default-extensions:   AllowAmbiguousTypes
+                        ApplicativeDo
+                        BlockArguments
                         DataKinds
+                        DefaultSignatures
+                        DeriveGeneric
+                        DeriveAnyClass
+                        DerivingStrategies
+                        DerivingVia
+                        DisambiguateRecordFields
+                        DuplicateRecordFields
                         FlexibleContexts
+                        FunctionalDependencies
+                        GADTs
+                        ImportQualifiedPost
                         LambdaCase
+                        LiberalTypeSynonyms
+                        MonadComprehensions
                         MonoLocalBinds
+                        MultiWayIf
+                        NoFieldSelectors
                         NoImplicitPrelude
+                        OverloadedLabels
+                        OverloadedRecordDot
+                        OverloadedStrings
+                        PackageImports
+                        PartialTypeSignatures
+                        PatternSynonyms
+                        QuantifiedConstraints
+                        QuasiQuotes
+                        RecordWildCards
+                        RecursiveDo
+                        RoleAnnotations
+                        ScopedTypeVariables
+                        TupleSections
+                        TypeFamilies
+                        TypeFamilyDependencies
+                        TypeApplications
                         TypeOperators
+                        UndecidableInstances
+                        UnicodeSyntax
+                        ViewPatterns
   ghc-options:          -Wall
+                        -Werror
                         -Wincomplete-record-updates
                         -Wincomplete-uni-patterns
+                        -- -Wno-incomplete-patterns
                         -Wtabs
                         -Wunused-packages
-
-  if impl(ghc >= 8.10.1)
-    ghc-options:        -Wunused-packages
 
 library
   import:               base, project-config,
@@ -98,6 +143,15 @@ library
                         cryptonite,
                         deepseq,
                         directory,
+                        effectful,
+                        effectful-core,
+                        effectful-plugin,
+                        effectful-zoo-amazonka,
+                        effectful-zoo-console,
+                        effectful-zoo-core,
+                        effectful-zoo-datalog,
+                        effectful-zoo-lazy,
+                        effectful-zoo-log,
                         exceptions,
                         filepath,
                         generic-lens,
@@ -106,13 +160,12 @@ library
                         http-types,
                         hw-prelude,
                         microlens,
-                        mtl,
                         network-uri,
-                        oops,
                         optparse-applicative,
                         process,
                         relation,
                         resourcet,
+                        resourcet-effectful,
                         stm,
                         text,
                         topograph,
@@ -130,6 +183,7 @@ library
                         HaskellWorks.CabalCache.Core
                         HaskellWorks.CabalCache.Data.List
                         HaskellWorks.CabalCache.Error
+                        HaskellWorks.CabalCache.Exit
                         HaskellWorks.CabalCache.GhcPkg
                         HaskellWorks.CabalCache.Hash
                         HaskellWorks.CabalCache.IO.Console
@@ -145,6 +199,7 @@ library
                         HaskellWorks.CabalCache.Types
                         HaskellWorks.CabalCache.URI
                         HaskellWorks.CabalCache.Version
+  ghc-options:          -fplugin=Effectful.Plugin
 
 executable cabal-cache
   import:               base, project-config,
@@ -155,25 +210,31 @@ executable cabal-cache
                         cabal-install-parsers,
                         containers,
                         directory,
+                        effectful-core,
+                        effectful-plugin,
+                        effectful-zoo-amazonka,
+                        effectful-zoo-core,
+                        effectful-zoo-datalog,
+                        effectful-zoo-lazy,
+                        effectful-zoo-log,
+                        effectful,
                         exceptions,
                         filepath,
                         generic-lens,
                         hw-prelude,
-                        microlens,
                         lens,
                         network-uri,
-                        oops,
                         optparse-applicative,
-                        resourcet,
+                        resourcet-effectful,
                         stm,
                         stringsearch,
                         temporary,
                         text,
-                        unliftio,
   build-depends:        cabal-cache
   main-is:              Main.hs
   hs-source-dirs:       app
-  other-modules:        App.Commands
+  other-modules:        App.Amazonka
+                        App.Commands
                         App.Commands.Options.Parser
                         App.Commands.Debug
                         App.Commands.Debug.S3
@@ -183,6 +244,7 @@ executable cabal-cache
                         App.Commands.SyncFromArchive
                         App.Commands.SyncToArchive
                         App.Commands.Version
+                        App.Run
                         App.Static
                         App.Static.Base
                         App.Static.Posix
@@ -190,6 +252,7 @@ executable cabal-cache
                         Paths_cabal_cache
   autogen-modules:      Paths_cabal_cache
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
+  ghc-options:          -fplugin=Effectful.Plugin
 
 test-suite cabal-cache-test
   import:               base, project-config,
@@ -197,21 +260,29 @@ test-suite cabal-cache-test
                         amazonka,
                         bytestring,
                         directory,
+                        effectful-core,
+                        effectful-plugin,
+                        effectful-zoo-amazonka,
+                        effectful-zoo-core,
+                        effectful-zoo-hedgehog,
+                        effectful-zoo-hunit,
+                        effectful-zoo-lazy,
+                        effectful,
                         exceptions,
                         filepath,
+                        generic-lens,
                         Glob,
                         hedgehog-extras,
                         hedgehog,
                         hspec,
-                        http-types,
                         hw-hspec-hedgehog,
                         hw-prelude,
+                        microlens,
                         network-uri,
-                        oops,
                         raw-strings-qq,
+                        resourcet-effectful,
                         text,
                         time
-
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
   build-depends:        cabal-cache
@@ -223,3 +294,4 @@ test-suite cabal-cache-test
                         HaskellWorks.CabalCache.LocationSpec
                         HaskellWorks.CabalCache.QuerySpec
                         Test.Base
+  ghc-options:          -fplugin=Effectful.Plugin

@@ -1,5 +1,3 @@
-{-# LANGUAGE TypeApplications #-}
-
 module HaskellWorks.CabalCache.GhcPkg
   ( system,
     runGhcPkg,
@@ -8,10 +6,8 @@ module HaskellWorks.CabalCache.GhcPkg
     contextInit,
   ) where
 
-import Data.Generics.Product.Any (HasAny(the))
 import HaskellWorks.Prelude
 import HaskellWorks.Unsafe
-import Lens.Micro
 import System.Exit               (ExitCode (..), exitWith)
 import System.Process            (waitForProcess)
 
@@ -25,7 +21,7 @@ system []         = error "No command supplied" -- TODO Better error handling
 
 runGhcPkg :: Z.CompilerContext -> [String] -> IO ()
 runGhcPkg cc params = do
-  hGhcPkg2 <- system ((cc ^. the @"ghcPkgCmd") <> params)
+  hGhcPkg2 <- system (cc.ghcPkgCmd <> params)
   exitCodeGhcPkg2 <- waitForProcess hGhcPkg2
   case exitCodeGhcPkg2 of
     ExitFailure _ -> do

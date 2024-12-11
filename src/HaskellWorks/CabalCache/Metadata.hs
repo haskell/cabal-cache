@@ -1,5 +1,3 @@
-{-# LANGUAGE TupleSections #-}
-
 module HaskellWorks.CabalCache.Metadata
   ( metaDir,
     createMetadata,
@@ -22,10 +20,10 @@ metaDir = "_CC_METADATA"
 
 createMetadata :: MonadIO m => FilePath -> PackageInfo -> [(T.Text, LBS.ByteString)] -> m TarGroup
 createMetadata storePath pkg values = liftIO do
-  let pkgMetaPath = storePath </> packageDir pkg </> metaDir
+  let pkgMetaPath = storePath </> pkg.packageDir </> metaDir
   IO.createDirectoryIfMissing True pkgMetaPath
   forM_ values $ \(k, v) -> LBS.writeFile (pkgMetaPath </> T.unpack k) v
-  pure $ TarGroup storePath [packageDir pkg </> metaDir]
+  pure $ TarGroup storePath [pkg.packageDir </> metaDir]
 
 loadMetadata :: MonadIO m => FilePath -> m (Map.Map T.Text LBS.ByteString)
 loadMetadata pkgStorePath = liftIO do

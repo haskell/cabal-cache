@@ -1,6 +1,4 @@
-{-# LANGUAGE DeriveGeneric    #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeApplications #-}
+{- HLINT ignore "Functor law" -}
 
 module HaskellWorks.CabalCache.Topology
   ( PlanData(..),
@@ -12,10 +10,9 @@ import Control.Arrow                 ((&&&))
 import Data.Generics.Product.Any     (the)
 import Data.Map.Strict               (Map)
 import Data.Set                      (Set)
-import HaskellWorks.CabalCache.Types (Package, PackageId, PlanJson)
+import HaskellWorks.CabalCache.Types
 import HaskellWorks.Prelude
 import HaskellWorks.Unsafe
-import Lens.Micro
 import Lens.Micro.Extras             (view)
 
 import qualified Data.List       as L
@@ -31,11 +28,11 @@ buildPlanData :: PlanJson   -- ^ The original plan
   -> [PackageId]            -- ^ Packages that are known to be non-shareable
   -> PlanData               -- ^ Updated plan
 buildPlanData plan nonShareablePkgs =
-  let dm = dependenciesMap (plan ^. the @"installPlan")
+  let dm = dependenciesMap plan.installPlan
   in buildPlanData' dm nonShareablePkgs
 
 canShare :: PlanData -> PackageId -> Bool
-canShare planData pkgId = S.notMember pkgId (nonShareable planData)
+canShare planData pkgId = S.notMember pkgId planData.nonShareable
 
 -------------------------------------------------------------------------------
 

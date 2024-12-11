@@ -1,5 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-
 module HaskellWorks.CabalCache.LocationSpec
   ( spec,
   ) where
@@ -53,7 +51,7 @@ spec = describe "HaskellWorks.Assist.LocationSpec" do
 
   it "LocalLocation should roundtrip from and to text" $ require $ property do
     path <- forAll localPath
-    tripping (Local path) AWS.toText toLocation
+    tripping (LocalFile path) AWS.toText toLocation
 
   it "Should append s3 path" $ require $ property do
     loc  <- Uri <$> forAll s3Uri
@@ -62,7 +60,7 @@ spec = describe "HaskellWorks.Assist.LocationSpec" do
     AWS.toText (loc </> part <.> ext) === AWS.toText loc <> "/" <> part <> "." <> ext
 
   it "Should append s3 path" $ require $ property do
-    loc  <- Local <$> forAll localPath
+    loc  <- LocalFile <$> forAll localPath
     part <- forAll $ Gen.string (Range.linear 3 10) Gen.alphaNum
     ext  <- forAll $ Gen.string (Range.linear 2 4)  Gen.alphaNum
     AWS.toText (loc </> Text.pack part <.> Text.pack ext) === Text.pack ((Text.unpack $ AWS.toText loc) FP.</> part FP.<.> ext)

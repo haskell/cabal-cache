@@ -1,10 +1,3 @@
-{-# LANGUAGE DeriveGeneric          #-}
-{-# LANGUAGE FunctionalDependencies #-}
-{-# LANGUAGE MultiWayIf             #-}
-{-# LANGUAGE OverloadedStrings      #-}
-{-# LANGUAGE TypeApplications       #-}
-{-# LANGUAGE TypeFamilies           #-}
-
 module HaskellWorks.CabalCache.Location
 ( IsPath(..)
 , Location(..)
@@ -33,19 +26,19 @@ infixr 7 <.>
 
 data Location
   = Uri URI
-  | Local FilePath
+  | LocalFile FilePath
   deriving (Show, Eq, Generic)
 
 instance AWS.ToText Location where
   toText (Uri uri) = tshow uri
-  toText (Local p) = T.pack p
+  toText (LocalFile p) = T.pack p
 
 instance IsPath Location Text where
   Uri   b </> p = Uri   (b </> p)
-  Local b </> p = Local (b </> T.unpack p)
+  LocalFile b </> p = LocalFile (b </> T.unpack p)
 
   Uri   b <.> e = Uri   (b <.> e)
-  Local b <.> e = Local (b <.> T.unpack e)
+  LocalFile b <.> e = LocalFile (b <.> T.unpack e)
 
 instance IsPath Text Text where
   b </> p = T.pack (T.unpack b FP.</> T.unpack p)
@@ -69,7 +62,7 @@ instance IsPath S3Uri Text where
 toLocation :: Text -> Maybe Location
 toLocation t = case URI.parseURI (T.unpack t) of
   Just uri -> Just (Uri uri)
-  Nothing  -> Just (Local (T.unpack t))
+  Nothing  -> Just (LocalFile (T.unpack t))
 
 -------------------------------------------------------------------------------
 stripStart :: Text -> Text -> Text

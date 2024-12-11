@@ -1,66 +1,53 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
-
 module App.Commands.Debug.S3.Cp
   ( cmdCp,
   ) where
 
+import App.Amazonka
 import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
-import Data.Generics.Product.Any        (the)
-import HaskellWorks.CabalCache.AppError (AwsError(..), displayAwsError)
+import App.Run
+import Effectful.Zoo.Amazonka.Data.AwsError
+import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Lazy.Dynamic
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..), displayAwsStatusError)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)
 import HaskellWorks.Prelude
-import Lens.Micro
 import Network.URI                      (parseURI)
 
 import qualified Amazonka                           as AWS
 import qualified Amazonka.Data                      as AWS
 import qualified App.Commands.Options.Types         as Z
-import qualified Control.Monad.Oops                 as OO
 import qualified Data.Text                          as T
-import qualified HaskellWorks.CabalCache.AWS.Env    as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3     as AWS
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified Options.Applicative                as OA
 import qualified System.IO                          as IO
-import qualified System.IO.Unsafe                   as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
 {- HLINT ignore "Redundant do"              -}
 
 runCp :: Z.CpOptions -> IO ()
-runCp opts = OO.runOops $ OO.catchAndExitFailure @ExitFailure do
-  let srcUri        = opts ^. the @"srcUri"
-  let dstUri        = opts ^. the @"dstUri"
-  let mHostEndpoint = opts ^. the @"hostEndpoint"
-  let awsLogLevel   = opts ^. the @"awsLogLevel"
+runCp opts = runApp do
+  let srcUri        = opts.srcUri
+  let dstUri        = opts.dstUri
+  let mHostEndpoint = opts.hostEndpoint
+  let awsLogLevel   = opts.awsLogLevel
 
-  OO.catchAndExitFailure @ExitFailure do
-    envAws <-
-      liftIO (IO.unsafeInterleaveIO (AWS.mkEnv (opts ^. the @"region") (AWS.awsLogger awsLogLevel)))
-        <&> case mHostEndpoint of
-              Just (host, port, ssl) ->
-                \env ->
-                  env
-                    & the @"overrides" .~ \svc ->
-                        svc & the @"endpoint" %~ \mkEndpoint region ->
-                          mkEndpoint region
-                            & the @"host"   .~ host
-                            & the @"port"   .~ port
-                            & the @"secure" .~ ssl
-              Nothing -> id
-
-    AWS.copyS3Uri envAws srcUri dstUri
-      & do OO.catch @AwsError \e -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsError e
-      & do OO.catch @CopyFailed \CopyFailed -> do
-            CIO.hPutStrLn IO.stderr $ "Copy failed"
-      & do OO.catch @UnsupportedUri \e -> do
+  runLazy (mkAwsEnv opts.region mHostEndpoint awsLogLevel) do
+    AWS.copyS3Uri srcUri dstUri
+      & do trap @AwsStatusError \e -> do
+            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> displayAwsStatusError e
+            throw ExitFailure
+      & do trap @AwsError \e -> do
+            CIO.hPutStrLn IO.stderr $ "Copy failed: " <> tshow e
+            throw ExitFailure
+      & do trap @CopyFailed \CopyFailed -> do
+            CIO.hPutStrLn IO.stderr "Copy failed"
+            throw ExitFailure
+      & do trap @UnsupportedUri \e -> do
             CIO.hPutStrLn IO.stderr $ "Unsupported uri: " <> tshow e
+            throw ExitFailure
 
 optsCp :: OA.Parser CpOptions
 optsCp = CpOptions

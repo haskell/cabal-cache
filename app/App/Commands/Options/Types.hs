@@ -1,6 +1,3 @@
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-
 module App.Commands.Options.Types
   ( CpOptions(..),
     PlanOptions(..),

@@ -1,8 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-
-{-# OPTIONS_GHC -Wno-incomplete-uni-patterns #-}
-
 module HaskellWorks.CabalCache.IntegrationSpec
   ( spec
   ) where
@@ -29,7 +24,7 @@ import qualified Test.Base                    as H
 spec :: Spec
 spec = describe "HaskellWorks.CabalCache.IntegrationSpec" do
   it "local" $ H.require . H.withTests 1 $ H.integration $ H.runFinallies . H.workspace "local" $ \tempAbsBasePath' -> do
-    cwd <- H.noteIO $ IO.getCurrentDirectory
+    cwd <- H.noteIO IO.getCurrentDirectory
     let archivePath = tempAbsBasePath' </> "archive"
     let storePath   = tempAbsBasePath' </> "store"
     let buildPath   = cwd </> "dist-newstyle"

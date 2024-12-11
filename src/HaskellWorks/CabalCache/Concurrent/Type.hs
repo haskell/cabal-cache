@@ -1,6 +1,3 @@
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-
 module HaskellWorks.CabalCache.Concurrent.Type
   ( DownloadQueue(..),
     ConsumerId,

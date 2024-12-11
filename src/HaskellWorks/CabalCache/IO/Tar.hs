@@ -1,8 +1,3 @@
-{-# LANGUAGE DeriveAnyClass    #-}
-{-# LANGUAGE DeriveGeneric     #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications  #-}
-
 module HaskellWorks.CabalCache.IO.Tar
   ( ArchiveError(..),
     TarGroup(..),
@@ -11,16 +6,15 @@ module HaskellWorks.CabalCache.IO.Tar
   ) where
 
 import Control.DeepSeq                  (NFData)
-import Control.Monad.Except             (MonadError)
-import Data.Generics.Product.Any        (HasAny(the))
+import Effectful
+import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Core
 import HaskellWorks.Prelude
-import Lens.Micro
 
-import qualified Control.Monad.Oops as OO
 import qualified System.Exit        as IO
 import qualified System.Process     as IO
 
-data ArchiveError = ArchiveError Text deriving (Eq, Show, Generic)
+newtype ArchiveError = ArchiveError Text deriving (Eq, Show, Generic)
 
 data TarGroup = TarGroup
   { basePath   :: FilePath
@@ -28,34 +22,32 @@ data TarGroup = TarGroup
   } deriving (Show, Eq, Generic, NFData)
 
 createTar :: ()
-  => MonadIO m
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` ArchiveError
+  => r <: Error ArchiveError
+  => r <: IOE
   => Foldable t
   => [Char]
   -> t TarGroup
-  -> m ()
+  -> Eff r ()
 createTar tarFile groups = do
   let args = ["-zcf", tarFile] <> foldMap tarGroupToArgs groups
   process <- liftIO $ IO.spawnProcess "tar" args
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throw $ ArchiveError $ "Failed to create tar. Exit code: " <> tshow n
+    IO.ExitFailure n -> throw $ ArchiveError $ "Failed to create tar. Exit code: " <> tshow n
 
 extractTar :: ()
-  => MonadIO m
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` ArchiveError
+  => r <: Error ArchiveError
+  => r <: IOE
   => String
   -> String
-  -> m ()
+  -> Eff r ()
 extractTar tarFile targetPath = do
   process <- liftIO $ IO.spawnProcess "tar" ["-C", targetPath, "-zxf", tarFile]
   exitCode <- liftIO $ IO.waitForProcess process
   case exitCode of
     IO.ExitSuccess   -> return ()
-    IO.ExitFailure n -> OO.throw $ ArchiveError $ "Failed to extract tar.  Exit code: " <> tshow n
+    IO.ExitFailure n -> throw $ ArchiveError $ "Failed to extract tar.  Exit code: " <> tshow n
 
 tarGroupToArgs :: TarGroup -> [String]
-tarGroupToArgs tarGroup = ["-C", tarGroup ^. the @"basePath"] <> tarGroup ^. the @"entryPaths"
+tarGroupToArgs tarGroup = ["-C", tarGroup.basePath] <> tarGroup.entryPaths

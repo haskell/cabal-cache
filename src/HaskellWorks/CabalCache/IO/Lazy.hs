@@ -1,10 +1,3 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE TupleSections       #-}
-{-# LANGUAGE TypeApplications    #-}
-
-{-# OPTIONS_GHC -Wno-incomplete-patterns #-}
-
 module HaskellWorks.CabalCache.IO.Lazy
   ( readResource,
     readFirstAvailableResource,
@@ -14,24 +7,28 @@ module HaskellWorks.CabalCache.IO.Lazy
     linkOrCopyResource,
     readHttpUri,
     removePathRecursive,
-    retryOnE,
   ) where
 
-import Control.Monad.Catch              (MonadCatch(..))
-import Control.Monad.Except             (MonadError)
-import Control.Monad.Trans.Resource     (MonadResource, runResourceT, MonadUnliftIO)
 import Data.Generics.Product.Any        (HasAny(the))
 import Data.List.NonEmpty               (NonEmpty ((:|)))
-import HaskellWorks.CabalCache.AppError (AwsError(..), HttpError(..), statusCodeOf)
+import Effectful
+import Effectful.Resource
+import Effectful.Zoo.Amazonka.Data.AwsEnv
+import Effectful.Zoo.Amazonka.Data.AwsError
+import Effectful.Zoo.Amazonka.Data.AwsLogEntry
+import Effectful.Zoo.Core
+import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Core.Exception
+import Effectful.Zoo.DataLog.Dynamic
+import Effectful.Zoo.Lazy.Dynamic
+import HaskellWorks.CabalCache.AppError (AwsStatusError(..), HttpError(..), statusCodeOf)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), InvalidUrl(..), NotFound(..), NotImplemented(..), UnsupportedUri(..))
 import HaskellWorks.CabalCache.Location (Location (..))
 import HaskellWorks.Prelude
 import Lens.Micro
 import Network.URI                      (URI)
 
-import qualified Amazonka                             as AWS
 import qualified Control.Concurrent                   as IO
-import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
 import qualified Data.List.NonEmpty                   as NEL
 import qualified Data.Text                            as T
@@ -45,163 +42,159 @@ import qualified System.FilePath.Posix                as FP
 import qualified System.IO                            as IO
 import qualified System.IO.Error                      as IO
 
-
 {- HLINT ignore "Redundant do"        -}
 {- HLINT ignore "Reduce duplication"  -}
 {- HLINT ignore "Redundant bracket"   -}
 
 handleHttpError :: ()
-  => MonadError (OO.Variant e) m
-  => MonadCatch m
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` InvalidUrl
-  => MonadIO m
-  => Monad m
-  => m a
-  -> m a
-handleHttpError f = catch f $ \(e :: HTTP.HttpException) ->
+  => r <: Error HttpError
+  => r <: Error InvalidUrl
+  => Eff r a
+  -> Eff r a
+handleHttpError f = catchIO f $ \(e :: HTTP.HttpException) ->
   case e of
-    HTTP.HttpExceptionRequest request content' -> OO.throw $ HttpError request content'
-    HTTP.InvalidUrlException url' reason' -> OO.throw $ InvalidUrl (tshow url') (tshow reason')
+    HTTP.HttpExceptionRequest request content' -> throw $ HttpError request content'
+    HTTP.InvalidUrlException url' reason' -> throw $ InvalidUrl (tshow url') (tshow reason')
 
 readResource :: ()
-  => MonadResource m
-  => MonadCatch m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` UnsupportedUri
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` InvalidUrl
-  => e `OO.CouldBe` NotFound
-  => AWS.Env
-  -> Int
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error HttpError
+  => r <: Error InvalidUrl
+  => r <: Error NotFound
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => Int
   -> Location
-  -> ExceptT (OO.Variant e) m LBS.ByteString
-readResource envAws maxRetries = \case
-  Local path -> do
+  -> Eff r LBS.ByteString
+readResource maxRetries = \case
+  LocalFile path -> do
     fileExists <- liftIO $ IO.doesFileExist path
     if fileExists
       then liftIO $ LBS.readFile path
-      else OO.throw NotFound
+      else throw NotFound
   Uri uri -> retryS3 maxRetries $ case uri ^. the @"uriScheme" of
-    "s3:"     -> S3.getS3Uri envAws (URI.reslashUri uri)
+    "s3:"     -> S3.getS3Uri (URI.reslashUri uri)
     "http:"   -> readHttpUri (URI.reslashUri uri)
     "https:"  -> readHttpUri (URI.reslashUri uri)
-    scheme    -> OO.throw $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
+    scheme    -> throw $ UnsupportedUri uri $ "Unrecognised uri scheme: " <> T.pack scheme
 
 readFirstAvailableResource :: ()
-  => MonadResource m
-  => MonadCatch m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` InvalidUrl
-  => e `OO.CouldBe` NotFound
-  => e `OO.CouldBe` UnsupportedUri
-  => AWS.Env
-  -> NonEmpty Location
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error HttpError
+  => r <: Error InvalidUrl
+  => r <: Error NotFound
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => NonEmpty Location
   -> Int
-  -> ExceptT (OO.Variant e) m (LBS.ByteString, Location)
-readFirstAvailableResource envAws (a:|as) maxRetries = do
-  (, a) <$> readResource envAws maxRetries a
-    & do OO.catch @NotFound \e -> do
+  -> Eff r (LBS.ByteString, Location)
+readFirstAvailableResource (a:|as) maxRetries = do
+  (, a) <$> readResource maxRetries a
+    & do trap @NotFound \e -> do
           case NEL.nonEmpty as of
-            Nothing -> OO.throwF (Identity e)
-            Just nas -> readFirstAvailableResource envAws nas maxRetries
-    & do OO.catch @AwsError \e -> do
+            Nothing -> throw e
+            Just nas -> readFirstAvailableResource nas maxRetries
+    & do trap @AwsStatusError \e -> do
           case NEL.nonEmpty as of
-            Nothing -> OO.throwF (Identity e)
-            Just nas -> readFirstAvailableResource envAws nas maxRetries
-    & do OO.catch @HttpError \e -> do
+            Nothing -> throw e
+            Just nas -> readFirstAvailableResource nas maxRetries
+    & do trap @HttpError \e -> do
           case NEL.nonEmpty as of
-            Nothing -> OO.throwF (Identity e)
-            Just nas -> readFirstAvailableResource envAws nas maxRetries
+            Nothing -> throw e
+            Just nas -> readFirstAvailableResource nas maxRetries
 
-safePathIsSymbolLink :: FilePath -> IO Bool
-safePathIsSymbolLink filePath = catch (IO.pathIsSymbolicLink filePath) handler
-  where handler :: IOError -> IO Bool
+safePathIsSymbolLink :: ()
+  => r <: IOE
+  => FilePath
+  -> Eff r Bool
+safePathIsSymbolLink filePath =
+  catchIO (liftIO $ IO.pathIsSymbolicLink filePath) handler
+  where handler :: IOError -> Eff r Bool
         handler e = if IO.isDoesNotExistError e
           then return False
           else return True
 
 resourceExists :: ()
-  => MonadUnliftIO m
-  => MonadCatch m
-  => e `OO.CouldBe` InvalidUrl
-  => e `OO.CouldBe` UnsupportedUri
-  => AWS.Env
-  -> Location
-  -> ExceptT (OO.Variant e) m Bool
-resourceExists envAws = \case
-  Local path -> do
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error InvalidUrl
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => Location
+  -> Eff r Bool
+resourceExists = \case
+  LocalFile path -> do
     fileExists <- liftIO $ IO.doesFileExist path
     if fileExists
       then return True
       else do
-        symbolicLinkExists <- liftIO $ safePathIsSymbolLink path
+        symbolicLinkExists <- safePathIsSymbolLink path
         if symbolicLinkExists
           then do
             target <- liftIO $ IO.getSymbolicLinkTarget path
-            resourceExists envAws (Local target)
+            resourceExists (LocalFile target)
           else return False
   Uri uri -> case uri ^. the @"uriScheme" of
     "s3:" -> do
-      OO.suspend runResourceT $ (True <$ S3.headS3Uri envAws (URI.reslashUri uri))
-        & OO.catch @AwsError (pure . const False)
-        & OO.catch @HttpError (pure . const False)
+      (True <$ S3.headS3Uri (URI.reslashUri uri))
+        & trap_ @AwsStatusError (pure False)
+        -- & trap_ @HttpError (pure False)
     "http:" -> do
       (True <$ headHttpUri (URI.reslashUri uri))
-        & OO.catch @AwsError (pure . const False)
-        & OO.catch @HttpError (pure . const False)
+        & trap_ @HttpError (pure False)
+        & trap_ @AwsStatusError (pure False)
     _scheme -> return False
 
 writeResource :: ()
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` NotImplemented
-  => e `OO.CouldBe` UnsupportedUri
-  => MonadIO m
-  => MonadCatch m
-  => MonadUnliftIO m
-  => AWS.Env
-  -> Location
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error HttpError
+  => r <: Error NotImplemented
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => Location
   -> Int
   -> LBS.ByteString
-  -> ExceptT (OO.Variant e) m ()
-writeResource envAws loc maxRetries lbs = case loc of
-  Local path -> liftIO (LBS.writeFile path lbs) >> return ()
+  -> Eff r ()
+writeResource loc maxRetries lbs = case loc of
+  LocalFile path -> liftIO (LBS.writeFile path lbs)
   Uri uri' -> retryS3 maxRetries $ case uri' ^. the @"uriScheme" of
-    "s3:"   -> S3.putObject envAws (URI.reslashUri uri') lbs
-    "http:" -> OO.throw $ NotImplemented "HTTP PUT method not supported"
-    scheme  -> OO.throw $ UnsupportedUri uri' $ "Unrecognised uri scheme: " <> T.pack scheme
+    "s3:"   -> S3.putObject (URI.reslashUri uri') lbs
+    "http:" -> throw $ NotImplemented "HTTP PUT method not supported"
+    scheme  -> throw $ UnsupportedUri uri' $ "Unrecognised uri scheme: " <> T.pack scheme
 
-createLocalDirectoryIfMissing :: (MonadCatch m, MonadIO m) => Location -> m ()
+createLocalDirectoryIfMissing :: MonadIO m => Location -> m ()
 createLocalDirectoryIfMissing = \case
-  Local path -> liftIO $ IO.createDirectoryIfMissing True path
+  LocalFile path -> liftIO $ IO.createDirectoryIfMissing True path
   Uri uri       -> case uri ^. the @"uriScheme" of
     "s3:"   -> return ()
     "http:" -> return ()
     _scheme -> return ()
 
-retryOnE :: forall e e' m a. ()
-  => Monad m
-  => Int
-  -> ExceptT (OO.Variant e') m a
-  -> ExceptT (OO.Variant (e : e')) m a
-  -> ExceptT (OO.Variant e') m a
-retryOnE n g f = f
-  & do OO.catch @e \_ -> if n > 0
-        then retryOnE (n - 1) g f
-        else g
-
 retryWhen :: ()
-  => MonadIO m
+  => r <: Error x
+  => r <: IOE
   => Show x
-  => e `OO.CouldBe` x
   => (x -> Bool)
   -> Int
-  -> ExceptT (OO.Variant e) m a
-  -> ExceptT (OO.Variant e) m a
+  -> Eff r a
+  -> Eff r a
 retryWhen p n f = f
-  & do OO.snatch \exception -> do
+  & do trapIn \exception -> do
         if n > 0
           then do
             if p exception
@@ -209,28 +202,28 @@ retryWhen p n f = f
                 liftIO $ CIO.hPutStrLn IO.stderr $ "WARNING: " <> tshow exception <> " (retrying)"
                 liftIO $ IO.threadDelay 1000000
                 retryWhen p (n - 1) f
-              else OO.throw exception
-          else OO.throw exception
+              else throw exception
+          else throw exception
 
-retryUnless :: forall x e m a. ()
-  => MonadIO m
+retryUnless :: forall x r a. ()
   => Show x
-  => e `OO.CouldBe` x
+  => r <: Error x
+  => r <: IOE
   => (x -> Bool)
   -> Int
-  -> ExceptT (OO.Variant e) m a
-  -> ExceptT (OO.Variant e) m a
+  -> Eff r a
+  -> Eff r a
 retryUnless p = retryWhen (not . p)
 
 retryS3 :: ()
-  => MonadIO m
-  => e `OO.CouldBe` AwsError
+  => r <: Error AwsStatusError
+  => r <: IOE
   => Int
-  -> ExceptT (OO.Variant e) m a
-  -> ExceptT (OO.Variant e) m a
+  -> Eff r a
+  -> Eff r a
 retryS3 maxRetries a = do
   retryWhen retryPredicate maxRetries a
-  where retryPredicate :: AwsError -> Bool
+  where retryPredicate :: AwsStatusError -> Bool
         retryPredicate e = statusCodeOf e `elem` retryableHTTPStatuses
 
   -- https://docs.aws.amazon.com/AmazonS3/latest/API/ErrorResponses.html#ErrorCodeList
@@ -240,37 +233,38 @@ retryableHTTPStatuses :: [Int]
 retryableHTTPStatuses = [408, 409, 425, 426, 502, 503, 504]
 
 linkOrCopyResource :: ()
-  => MonadUnliftIO m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` CopyFailed
-  => e `OO.CouldBe` NotImplemented
-  => e `OO.CouldBe` UnsupportedUri
-  => AWS.Env
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error CopyFailed
+  => r <: Error NotImplemented
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => Location
   -> Location
-  -> Location
-  -> ExceptT (OO.Variant e) m ()
-linkOrCopyResource envAws source target = case source of
-  Local sourcePath -> case target of
-    Local targetPath -> do
+  -> Eff r ()
+linkOrCopyResource source target = case source of
+  LocalFile sourcePath -> case target of
+    LocalFile targetPath -> do
       liftIO $ IO.createDirectoryIfMissing True (FP.takeDirectory targetPath)
       targetPathExists <- liftIO $ IO.doesFileExist targetPath
       unless targetPathExists $ liftIO $ IO.createFileLink sourcePath targetPath
-    Uri _ -> OO.throw $ NotImplemented "Can't copy between different file backends"
+    Uri _ -> throw $ NotImplemented "Can't copy between different file backends"
   Uri sourceUri -> case target of
-    Local _targetPath -> OO.throw $ NotImplemented "Can't copy between different file backends"
+    LocalFile _targetPath -> throw $ NotImplemented "Can't copy between different file backends"
     Uri targetUri    -> case (sourceUri ^. the @"uriScheme", targetUri ^. the @"uriScheme") of
-      ("s3:", "s3:")               -> retryUnless @AwsError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri envAws (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
-      ("http:", "http:")           -> OO.throw $ NotImplemented "Link and copy unsupported for http backend"
-      (sourceScheme, targetScheme) -> OO.throw $ NotImplemented $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
+      ("s3:", "s3:")               -> retryUnless @AwsStatusError ((== 301) . statusCodeOf) 3 (S3.copyS3Uri (URI.reslashUri sourceUri) (URI.reslashUri targetUri))
+      ("http:", "http:")           -> throw $ NotImplemented "Link and copy unsupported for http backend"
+      (sourceScheme, targetScheme) -> throw $ NotImplemented $ "Unsupported backend combination: " <> T.pack sourceScheme <> " to " <> T.pack targetScheme
 
 readHttpUri :: ()
-  => MonadError (OO.Variant e) m
-  => MonadCatch m
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` InvalidUrl
-  => MonadIO m
+  => r <: Error HttpError
+  => r <: Error InvalidUrl
+  => r <: IOE
   => URI
-  -> m LBS.ByteString
+  -> Eff r LBS.ByteString
 readHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTPS.tlsManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("GET " <> tshow (URI.reslashUri httpUri)))
@@ -279,13 +273,11 @@ readHttpUri httpUri = handleHttpError do
   return $ HTTP.responseBody response
 
 headHttpUri :: ()
-  => MonadError (OO.Variant e) m
-  => MonadCatch m
-  => e `OO.CouldBe` HttpError
-  => e `OO.CouldBe` InvalidUrl
-  => MonadIO m
+  => r <: Error HttpError
+  => r <: Error InvalidUrl
+  => r <: IOE
   => URI
-  -> m LBS.ByteString
+  -> Eff r LBS.ByteString
 headHttpUri httpUri = handleHttpError do
   manager <- liftIO $ HTTP.newManager HTTP.defaultManagerSettings
   request <- liftIO $ HTTP.parseUrlThrow (T.unpack ("HEAD " <> tshow (URI.reslashUri httpUri)))
@@ -294,8 +286,8 @@ headHttpUri httpUri = handleHttpError do
   return $ HTTP.responseBody response
 
 removePathRecursive :: ()
-  => MonadCatch m
-  => MonadIO m
+  => r <: IOE
   => [Char]
-  -> ExceptT (OO.Variant e) m ()
-removePathRecursive pkgStorePath = liftIO (IO.removeDirectoryRecursive pkgStorePath)
+  -> Eff r ()
+removePathRecursive pkgStorePath =
+  liftIO (IO.removeDirectoryRecursive pkgStorePath)

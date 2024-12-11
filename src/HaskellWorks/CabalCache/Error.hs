@@ -1,7 +1,3 @@
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-
 module HaskellWorks.CabalCache.Error
   ( DecodeError(DecodeError),
     ExitFailure(ExitFailure),
@@ -15,7 +11,7 @@ module HaskellWorks.CabalCache.Error
 import HaskellWorks.Prelude
 import Network.URI  (URI)
 
-data DecodeError = DecodeError Text deriving (Eq, Show, Generic)
+newtype DecodeError = DecodeError Text deriving (Eq, Show, Generic)
 
 data ExitFailure = ExitFailure deriving (Eq, Show, Generic)
 
@@ -28,7 +24,7 @@ data InvalidUrl = InvalidUrl
 
 data NotFound = NotFound deriving (Eq, Show, Generic)
 
-data NotImplemented = NotImplemented Text deriving (Eq, Show, Generic)
+newtype NotImplemented = NotImplemented Text deriving (Eq, Show, Generic)
 
 data UnsupportedUri = UnsupportedUri
   { uri    :: URI

@@ -1,7 +1,3 @@
-{-# LANGUAGE OverloadedStrings   #-}
-{-# LANGUAGE RecordWildCards     #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-
 module App.Commands.Version
   ( cmdVersion,
   ) where

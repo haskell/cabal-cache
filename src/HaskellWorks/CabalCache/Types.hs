@@ -1,9 +1,3 @@
-{-# LANGUAGE ApplicativeDo         #-}
-{-# LANGUAGE DeriveGeneric         #-}
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedStrings     #-}
-{-# LANGUAGE RecordWildCards       #-}
-
 module HaskellWorks.CabalCache.Types
   ( CompilerId,
     PackageId,

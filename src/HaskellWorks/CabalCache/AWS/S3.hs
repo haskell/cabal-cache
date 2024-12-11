@@ -1,10 +1,3 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE OverloadedLabels #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
-{-# LANGUAGE ViewPatterns #-}
-
 module HaskellWorks.CabalCache.AWS.S3
   ( uriToS3Uri,
     headS3Uri,
@@ -16,21 +9,25 @@ module HaskellWorks.CabalCache.AWS.S3
 
 import Amazonka                           (ResponseBody)
 import Amazonka.Data                      (ToText(..), fromText)
-import Control.Monad.Catch                (MonadCatch(..))
-import Control.Monad.Except               (MonadError)
-import Control.Monad.Trans.Resource       (MonadResource, MonadUnliftIO, liftResourceT, runResourceT)
+import Control.Monad.Trans.Resource       (MonadResource, liftResourceT)
 import Data.Conduit.Lazy                  (lazyConsume)
 import Data.Generics.Product.Any          (the)
-import HaskellWorks.CabalCache.AppError   (AwsError(..))
+import Effectful
+import Effectful.Resource
+import Effectful.Zoo.Amazonka.Api.Send
+import Effectful.Zoo.Amazonka.Data
+import Effectful.Zoo.Core
+import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Lazy.Dynamic
+import Effectful.Zoo.DataLog.Dynamic
+import HaskellWorks.CabalCache.AppError   (AwsStatusError(..))
 import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
 import HaskellWorks.Prelude
 import Lens.Micro
 import Network.URI                        (URI)
 
 import qualified Amazonka                             as AWS
--- import qualified Amazonka.Data.Body                   as AWS
 import qualified Amazonka.S3                          as AWS
-import qualified Control.Monad.Oops                   as OO
 import qualified Data.ByteString.Lazy                 as LBS
 import qualified HaskellWorks.CabalCache.AWS.Error    as AWS
 import qualified HaskellWorks.CabalCache.AWS.S3.URI   as AWS
@@ -40,26 +37,31 @@ import qualified System.IO                            as IO
 
 --- | Access the response body as a lazy bytestring
 lazyByteString :: MonadResource m => ResponseBody -> m LBS.ByteString
-lazyByteString rsBody = liftResourceT $ LBS.fromChunks <$> lazyConsume (rsBody ^. the @"body")
+lazyByteString rsBody = liftResourceT $ LBS.fromChunks <$> lazyConsume rsBody.body
 
 unsafeDownloadRequest :: ()
-  => Monad m
-  => MonadResource m
-  => AWS.Env
-  -> AWS.GetObject
-  -> m LBS.ByteString
-unsafeDownloadRequest awsEnv req = do
-  resp <- AWS.send awsEnv req
-  lazyByteString (resp ^. the @"body")
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => AWS.GetObject
+  -> Eff r LBS.ByteString
+unsafeDownloadRequest req = do
+  resp <- lazySendAws req
+  lazyByteString $ resp ^. the @"body"
 
 unsafeDownload :: ()
-  => Monad m
-  => MonadResource m
-  => AWS.Env
-  -> AWS.BucketName
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => AWS.BucketName
   -> AWS.ObjectKey
-  -> m LBS.ByteString
-unsafeDownload env bucketName objectKey = unsafeDownloadRequest env (AWS.newGetObject bucketName objectKey)
+  -> Eff r LBS.ByteString
+unsafeDownload bucketName objectKey =
+  unsafeDownloadRequest (AWS.newGetObject bucketName objectKey)
 
 uriToS3Uri :: URI -> Either UnsupportedUri AWS.S3Uri
 uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
@@ -67,62 +69,76 @@ uriToS3Uri uri = case fromText @AWS.S3Uri (tshow uri) of
   Left msg    -> Left $ UnsupportedUri uri $ "Unable to parse URI" <> tshow msg
 
 headS3Uri :: ()
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` UnsupportedUri
-  => MonadCatch m
-  => MonadResource m
-  => AWS.Env
-  -> URI
-  -> m AWS.HeadObjectResponse
-headS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
-  AWS.handleAwsError $ AWS.send envAws $ AWS.newHeadObject b k
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => URI
+  -> Eff r AWS.HeadObjectResponse
+headS3Uri uri = do
+  AWS.S3Uri b k <- uriToS3Uri (URI.reslashUri uri)
+    & onLeft throw
+
+  AWS.handleAwsStatusError $ lazySendAws $ AWS.newHeadObject b k
 
 putObject :: ()
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` UnsupportedUri
-  => MonadCatch m
-  => MonadUnliftIO m
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
   => AWS.ToBody a
-  => AWS.Env
-  -> URI
+  => URI
   -> a
-  -> ExceptT (OO.Variant e) m ()
-putObject envAws uri lbs = do
-  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
+  -> Eff r ()
+putObject uri lbs = do
+  AWS.S3Uri b k <- uriToS3Uri (URI.reslashUri uri)
+    & onLeft throw
+
   let req = AWS.toBody lbs
   let po  = AWS.newPutObject b k req
-  AWS.handleAwsError $ void $ OO.suspend runResourceT $ AWS.send envAws po
+
+  AWS.handleAwsStatusError $ void $ lazySendAws po
 
 getS3Uri :: ()
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` UnsupportedUri
-  => MonadCatch m
-  => MonadResource m
-  => AWS.Env
-  -> URI
-  -> m LBS.ByteString
-getS3Uri envAws uri = do
-  AWS.S3Uri b k <- OO.hoistEither $ uriToS3Uri (URI.reslashUri uri)
-  AWS.handleAwsError $ unsafeDownload envAws b k
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => URI
+  -> Eff r LBS.ByteString
+getS3Uri uri = do
+  AWS.S3Uri b k <- uriToS3Uri (URI.reslashUri uri)
+    & onLeft throw
+
+  AWS.handleAwsStatusError $ unsafeDownload b k
 
 copyS3Uri :: ()
-  => MonadUnliftIO m
-  => e `OO.CouldBe` AwsError
-  => e `OO.CouldBe` CopyFailed
-  => e `OO.CouldBe` UnsupportedUri
-  => AWS.Env
+  => r <: DataLog AwsLogEntry
+  => r <: Error AwsError
+  => r <: Error AwsStatusError
+  => r <: Error CopyFailed
+  => r <: Error UnsupportedUri
+  => r <: IOE
+  => r <: Lazy AwsEnv
+  => r <: Resource
+  => URI
   -> URI
-  -> URI
-  -> ExceptT (OO.Variant e) m ()
-copyS3Uri envAws source target = do
-  AWS.S3Uri sourceBucket sourceObjectKey <- OO.hoistEither $ uriToS3Uri (URI.reslashUri source)
-  AWS.S3Uri targetBucket targetObjectKey <- OO.hoistEither $ uriToS3Uri (URI.reslashUri target)
+  -> Eff r ()
+copyS3Uri source target = do
+  AWS.S3Uri sourceBucket sourceObjectKey <- uriToS3Uri (URI.reslashUri source) & onLeft throw
+  AWS.S3Uri targetBucket targetObjectKey <- uriToS3Uri (URI.reslashUri target) & onLeft throw
   let copyObjectRequest = AWS.newCopyObject targetBucket (toText sourceBucket <> "/" <> toText sourceObjectKey) targetObjectKey
-  response <- OO.suspend runResourceT $ AWS.send envAws copyObjectRequest
+  response <- lazySendAws copyObjectRequest
   let responseCode = response ^. the @"httpStatus"
   unless (200 <= responseCode && responseCode < 300) do
     liftIO $ CIO.hPutStrLn IO.stderr $ "Error in S3 copy: " <> tshow response
-    OO.throw CopyFailed
+    throw CopyFailed

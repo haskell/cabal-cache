@@ -1,18 +1,12 @@
-{-# LANGUAGE DataKinds #-}
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE TypeApplications #-}
-
 module HaskellWorks.CabalCache.AWS.Env
   ( awsLogger
   , mkEnv
-  , setEnvEndpoint
   ) where
 
 import Control.Concurrent           (myThreadId)
 import Data.ByteString.Builder      (toLazyByteString)
-import Data.Generics.Product.Any    (the)
+import Effectful.Zoo.Amazonka.Data.AwsEnv
 import HaskellWorks.Prelude
-import Lens.Micro
 import Network.HTTP.Client          (HttpException (..), HttpExceptionContent (..))
 
 import qualified Amazonka                           as AWS
@@ -24,21 +18,7 @@ import qualified Data.Text.Encoding                 as T
 import qualified HaskellWorks.CabalCache.IO.Console as CIO
 import qualified System.IO                          as IO
 
-setEnvEndpoint :: Maybe (ByteString, Int, Bool) -> IO AWS.Env -> IO AWS.Env
-setEnvEndpoint mHostEndpoint getEnv = do
-  env <- getEnv
-  case mHostEndpoint of
-    Just (host, port, ssl) ->
-      pure $ env
-        & the @"overrides" .~ \svc -> do
-            svc & the @"endpoint" %~ \mkEndpoint region -> do
-              mkEndpoint region
-                & the @"host" .~ host
-                & the @"port" .~ port
-                & the @"secure" .~ ssl
-    Nothing -> pure env
-
-mkEnv :: AWS.Region -> (AWS.LogLevel -> LBS.ByteString -> IO ()) -> IO AWS.Env
+mkEnv :: AWS.Region -> (AWS.LogLevel -> LBS.ByteString -> IO ()) -> IO AwsEnv
 mkEnv region lg = do
   lgr <- newAwsLogger lg
   discoveredEnv <- AWS.newEnv AWS.discover

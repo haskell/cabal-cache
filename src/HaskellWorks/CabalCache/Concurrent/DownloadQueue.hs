@@ -1,8 +1,3 @@
-{-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RankNTypes        #-}
-{-# LANGUAGE RecordWildCards   #-}
-{-# LANGUAGE TypeApplications  #-}
-
 module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ( DownloadStatus(..),
     createDownloadQueue,
@@ -12,14 +7,15 @@ module HaskellWorks.CabalCache.Concurrent.DownloadQueue
   ) where
 
 import Control.Monad.Catch          (MonadMask(..))
-import Control.Monad.Except         (MonadError)
 import Data.Set                     ((\\))
+import Effectful
+import Effectful.Zoo.Core
+import Effectful.Zoo.Core.Error.Static
 import Prelude                      hiding (fail)
 import HaskellWorks.Prelude
 
 import qualified Control.Concurrent.STM                  as STM
 import qualified Control.Monad.Catch                     as CMC
-import qualified Control.Monad.Oops                      as OO
 import qualified Data.Relation                           as R
 import qualified Data.Set                                as S
 import qualified HaskellWorks.CabalCache.Concurrent.Type as Z
@@ -28,17 +24,17 @@ import qualified System.IO                               as IO
 
 data DownloadStatus = DownloadSuccess | DownloadFailure deriving (Eq, Show)
 
-downloadSucceed :: forall e a m. ()
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` DownloadStatus
-  => m a
-downloadSucceed = OO.throw DownloadSuccess
+downloadSucceed :: forall a r. ()
+  => r <: Error DownloadStatus
+  => Eff r a
+downloadSucceed =
+  throw DownloadSuccess
 
-downloadFail :: forall e a m. ()
-  => MonadError (OO.Variant e) m
-  => e `OO.CouldBe` DownloadStatus
-  => m a
-downloadFail = OO.throw DownloadFailure
+downloadFail :: forall a r. ()
+  => r <: Error DownloadStatus
+  => Eff r a
+downloadFail =
+  throw DownloadFailure
 
 createDownloadQueue :: [(Z.ProviderId, Z.ConsumerId)] -> STM.STM Z.DownloadQueue
 createDownloadQueue dependencies = do
