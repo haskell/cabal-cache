@@ -11,6 +11,12 @@ on:
     tags:
       - 'v*'
   pull_request:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "The commit, branch, or tag to build"
+        required: true
+        default: "main"
 
 jobs:
   build:
@@ -30,7 +36,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-
+        with:
+          ref: ${{ github.event.inputs.ref }} # Checkout the specified branch, tag, or commit
+  
       - uses: haskell-actions/setup@v2
         id: setup-haskell
         with:
