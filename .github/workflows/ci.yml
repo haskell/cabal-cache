@@ -150,8 +150,8 @@ jobs:
         env:
           server: http://hackage.haskell.org
           username: ${{ secrets.HACKAGE_USER }}
-          password: ${{ secrets.HACKAGE_PASS }}
-          GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+          # password: ${{ secrets.HACKAGE_PASS }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           package_version="$(cat *.cabal | grep '^version:' | cut -d : -f 2 | xargs)"
 
@@ -173,7 +173,7 @@ jobs:
     needs: [build, check]
     runs-on: ubuntu-latest
 
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ needs.check.outputs.tag != '' }}
 
     outputs:
       upload_url: ${{ steps.create_release.outputs.upload_url }}
@@ -222,11 +222,15 @@ jobs:
             fi
           done
 
+      - name: Debug
+        run: |
+          echo "tag=${{ needs.check.outputs.tag }}"
+
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v1
+        uses: actions/create-release@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} # This token is provided by Actions, you do not need to create your own token
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tag_name: ${{ needs.check.outputs.tag }}
           release_name: Release ${{ needs.check.outputs.tag }}
@@ -239,7 +243,7 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
-    if: startsWith(github.ref, 'refs/tags/v')
+    if: ${{ needs.check.outputs.tag != '' }}
 
     strategy:
       fail-fast: false
