@@ -4,12 +4,12 @@ module HaskellWorks.CabalCache.Exit
 
 import Effectful
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Log.Api
-import Effectful.Zoo.Log.Dynamic
 import HaskellWorks.Prelude
 
 import qualified System.Exit                        as IO
+import Effectful.Zoo.Log.Static
 
 catchAndExitFailure :: forall e a r. ()
   => Show e

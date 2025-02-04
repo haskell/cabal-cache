@@ -7,7 +7,7 @@ import App.Commands.Options.Parser      (text)
 import App.Commands.Options.Types       (CpOptions (CpOptions))
 import App.Run
 import Effectful.Zoo.Amazonka.Data.AwsError
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Lazy.Dynamic
 import HaskellWorks.CabalCache.AppError (AwsStatusError(..), displayAwsStatusError)
 import HaskellWorks.CabalCache.Error    (CopyFailed(..), ExitFailure(..), UnsupportedUri)

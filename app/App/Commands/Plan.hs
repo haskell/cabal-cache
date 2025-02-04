@@ -12,7 +12,7 @@ import Control.Lens (Each (each), (%~))
 import Data.Aeson qualified as J
 import Data.ByteString.Lazy qualified as LBS
 import Data.Text qualified as T
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import HaskellWorks.CabalCache.Core qualified as Z
 import HaskellWorks.CabalCache.Error (DecodeError, ExitFailure (..))
 import HaskellWorks.CabalCache.Hash qualified as H

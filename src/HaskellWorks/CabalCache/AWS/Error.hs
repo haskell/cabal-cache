@@ -5,7 +5,7 @@ module HaskellWorks.CabalCache.AWS.Error
 import Effectful
 import Effectful.Zoo.Amazonka.Data.AwsError
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import HaskellWorks.CabalCache.AppError (AwsStatusError(..))
 import HaskellWorks.Prelude
 

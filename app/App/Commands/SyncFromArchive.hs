@@ -16,7 +16,7 @@ import Data.List.NonEmpty               (NonEmpty)
 import Effectful
 import Effectful.Zoo.Amazonka.Data.AwsError
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Lazy.Dynamic
 import HaskellWorks.CabalCache.AppError (AwsStatusError, HttpError (..), displayAwsStatusError, displayHttpError)
 import HaskellWorks.CabalCache.Concurrent.Fork
