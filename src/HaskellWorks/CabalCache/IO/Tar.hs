@@ -7,8 +7,8 @@ module HaskellWorks.CabalCache.IO.Tar
 
 import Control.DeepSeq                  (NFData)
 import Effectful
-import Effectful.Zoo.Core.Error.Static
 import Effectful.Zoo.Core
+import Effectful.Zoo.Error.Static
 import HaskellWorks.Prelude
 
 import qualified System.Exit        as IO

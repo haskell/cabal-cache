@@ -12,8 +12,8 @@ import Control.DeepSeq                  (NFData)
 import Data.Aeson                       (eitherDecode)
 import Effectful
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
-import Effectful.Zoo.Core.Exception
+import Effectful.Zoo.Error.Static
+import Effectful.Zoo.Exception
 import HaskellWorks.CabalCache.Error    (DecodeError(..))
 import HaskellWorks.Prelude
 import System.FilePath                  ((<.>), (</>))
