@@ -10,7 +10,7 @@ import Control.Monad.Catch          (MonadMask(..))
 import Data.Set                     ((\\))
 import Effectful
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Prelude                      hiding (fail)
 import HaskellWorks.Prelude
 

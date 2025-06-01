@@ -36,14 +36,10 @@ common directory                      { build-depends: directory                
 common effectful                      { build-depends: effectful                      >= 2.5        && < 3      }
 common effectful-core                 { build-depends: effectful-core                 >= 2.5        && < 3      }
 common effectful-plugin               { build-depends: effectful-plugin               >= 1.1.0.4    && < 2      }
-common effectful-zoo-amazonka         { build-depends: effectful-zoo:amazonka         >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-console          { build-depends: effectful-zoo:console          >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-core             { build-depends: effectful-zoo:core             >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-datalog          { build-depends: effectful-zoo:datalog          >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-hedgehog         { build-depends: effectful-zoo:hedgehog         >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-hunit            { build-depends: effectful-zoo:hunit            >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-lazy             { build-depends: effectful-zoo:lazy             >= 0.0.1.0    && < 0.1    }
-common effectful-zoo-log              { build-depends: effectful-zoo:log              >= 0.0.1.0    && < 0.1    }
+common effectful-zoo-amazonka         { build-depends: effectful-zoo:amazonka         >= 0.0.4.1    && < 0.1    }
+common effectful-zoo-core             { build-depends: effectful-zoo:core             >= 0.0.4.1    && < 0.1    }
+common effectful-zoo-hedgehog         { build-depends: effectful-zoo:hedgehog         >= 0.0.4.1    && < 0.1    }
+common effectful-zoo-hunit            { build-depends: effectful-zoo:hunit            >= 0.0.4.1    && < 0.1    }
 common exceptions                     { build-depends: exceptions                     >= 0.10.1     && < 0.11   }
 common filepath                       { build-depends: filepath                       >= 1.3        && < 1.6    }
 common generic-lens                   { build-depends: generic-lens                   >= 1.1.0.0    && < 2.3    }
@@ -71,6 +67,7 @@ common selective                      { build-depends: selective                
 common stm                            { build-depends: stm                            >= 2.5.0.0    && < 3      }
 common stringsearch                   { build-depends: stringsearch                   >= 0.3.6.6    && < 0.4    }
 common tar                            { build-depends: tar                            >= 0.5.1.0    && < 0.7    }
+common tasty                          { build-depends: tasty                          >= 1.5.1      && < 2      }
 common temporary                      { build-depends: temporary                      >= 1.3        && < 1.4    }
 common text                           { build-depends: text                           >= 1.2.3.1    && < 2.2    }
 common time                           { build-depends: time                           >= 1.4        && < 1.13   }
@@ -154,11 +151,7 @@ library
                         effectful-core,
                         effectful-plugin,
                         effectful-zoo-amazonka,
-                        effectful-zoo-console,
                         effectful-zoo-core,
-                        effectful-zoo-datalog,
-                        effectful-zoo-lazy,
-                        effectful-zoo-log,
                         exceptions,
                         filepath,
                         generic-lens,
@@ -221,9 +214,6 @@ executable cabal-cache
                         effectful-plugin,
                         effectful-zoo-amazonka,
                         effectful-zoo-core,
-                        effectful-zoo-datalog,
-                        effectful-zoo-lazy,
-                        effectful-zoo-log,
                         effectful,
                         exceptions,
                         filepath,
@@ -272,8 +262,6 @@ test-suite cabal-cache-test
                         effectful-zoo-amazonka,
                         effectful-zoo-core,
                         effectful-zoo-hedgehog,
-                        effectful-zoo-hunit,
-                        effectful-zoo-lazy,
                         effectful,
                         exceptions,
                         filepath,
@@ -288,6 +276,7 @@ test-suite cabal-cache-test
                         network-uri,
                         raw-strings-qq,
                         resourcet-effectful,
+                        tasty,
                         text,
                         time
   type:                 exitcode-stdio-1.0
@@ -295,7 +284,7 @@ test-suite cabal-cache-test
   build-depends:        cabal-cache
   hs-source-dirs:       test
   ghc-options:          -threaded -rtsopts -with-rtsopts=-N
-  build-tool-depends:   hspec-discover:hspec-discover
+  build-tool-depends:   tasty-discover:tasty-discover
   other-modules:        HaskellWorks.CabalCache.AwsSpec
                         HaskellWorks.CabalCache.IntegrationSpec
                         HaskellWorks.CabalCache.LocationSpec

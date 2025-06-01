@@ -5,24 +5,23 @@ module HaskellWorks.CabalCache.AwsSpec
 import Data.Generics.Product.Any
 import Effectful
 import Effectful.Concurrent
-import Effectful.Resource
 import Effectful.Environment
-import Effectful.Error.Static (runError)
+import Effectful.Resource
 import Effectful.Zoo.Amazonka.Api.Discover
 import Effectful.Zoo.Amazonka.Data.AwsEnv
 import Effectful.Zoo.Amazonka.Data.AwsError
 import Effectful.Zoo.Amazonka.Data.AwsLogEntry
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Hedgehog.Api
-import Effectful.Zoo.Hedgehog.Dynamic
-import Effectful.Zoo.HUnit
+import Effectful.Zoo.Hedgehog.Data
+import Effectful.Zoo.Hedgehog.Effect.Hedgehog
+import Effectful.Zoo.Hedgehog.Effect.Run
 import Effectful.Zoo.Lazy.Dynamic
 import HaskellWorks.CabalCache.AppError (AwsStatusError(..))
 import HaskellWorks.CabalCache.Error    (UnsupportedUri)
 import HaskellWorks.Prelude
 import Lens.Micro
-import Test.Hspec
 
 import qualified HaskellWorks.CabalCache.AWS.S3   as AWS
 import qualified Network.URI                      as URI
@@ -61,9 +60,8 @@ runTestEnv f =
     & runEnvironment
     & runResource
 
-spec :: Spec
-spec = describe "HaskellWorks.CabalCache.QuerySpec" do
-  it "stub" $ requireTest $ hedgehog $ runTestEnv $ catchSuccess $ do
+spec :: UnitTest
+spec = unit $ runTestEnv $ catchSuccess $ do
     uri <- URI.parseURI "s3://cache.haskellworks.io/test/cabal-cache/ci"
       & onNothingFail
 

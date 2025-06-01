@@ -7,7 +7,7 @@ import HaskellWorks.Prelude
 import Effectful
 import Effectful.Zoo.Console.Dynamic
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Data.Text qualified as T
 import System.Directory qualified as IO
 import System.Exit qualified as IO
