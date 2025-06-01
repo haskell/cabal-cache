@@ -13,16 +13,17 @@ import Effectful.Resource
 import Effectful.Zoo.Amazonka.Api.Run
 import Effectful.Zoo.Amazonka.Data.AwsLogEntry
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
 import Effectful.Zoo.DataLog.Data.LogEntry
-import Effectful.Zoo.DataLog.Dynamic
+import Effectful.Zoo.DataLog.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Log.Data.LogMessage
 import Effectful.Zoo.Log.Data.Severity
-import Effectful.Zoo.Log.Dynamic
+import Effectful.Zoo.Log.Static
 import HaskellWorks.Prelude
+import HaskellWorks.ToText
 
-import qualified Data.Text                          as T
-import qualified System.IO                          as IO
+import Data.Text.IO qualified as T
+import System.IO qualified as IO
 
 {- HLINT ignore "Monoid law, left identity" -}
 {- HLINT ignore "Reduce duplication"        -}
@@ -30,12 +31,14 @@ import qualified System.IO                          as IO
 
 writeLog :: ()
   => r <: IOE
-  => CallStack
-  -> Severity
-  -> Text
+  => Eff r Severity
+  -> CallStack
+  -> LogMessage Text
   -> Eff r ()
-writeLog _ _ t = do
-  liftIO $ IO.hPutStrLn IO.stderr $ T.unpack t -- TODO write severity
+writeLog getLogSeverity _cs (LogMessage messageSeverity message) = do
+  logSeverity <- getLogSeverity
+  when (messageSeverity >= logSeverity) $
+    liftIO $ T.hPutStrLn IO.stderr $ "[" <> toText messageSeverity <> "] " <> message
 
 runApp :: ()
   => Eff
@@ -55,7 +58,7 @@ runApp f =
       & catchAndExitFailure @ExitFailure
       & runDataLogAwsLogEntryToLog
       & runDataLog @(LogEntry (LogMessage Text)) (\_ -> pure ()) -- TODO log these properly
-      & runLog (ConcUnlift Persistent Unlimited) writeLog
+      & runLog (ConcUnlift Persistent Unlimited) (writeLog (pure Info))
       & runEnvironment
       & runConcurrent
       & runResource

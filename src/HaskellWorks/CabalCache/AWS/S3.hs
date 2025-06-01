@@ -17,9 +17,9 @@ import Effectful.Resource
 import Effectful.Zoo.Amazonka.Api.Send
 import Effectful.Zoo.Amazonka.Data
 import Effectful.Zoo.Core
-import Effectful.Zoo.Core.Error.Static
+import Effectful.Zoo.Error.Static
 import Effectful.Zoo.Lazy.Dynamic
-import Effectful.Zoo.DataLog.Dynamic
+import Effectful.Zoo.DataLog.Static
 import HaskellWorks.CabalCache.AppError   (AwsStatusError(..))
 import HaskellWorks.CabalCache.Error      (CopyFailed(..), UnsupportedUri(..))
 import HaskellWorks.Prelude
